@@ -183,13 +183,22 @@ fi
 # ---------------------------------------------------------------------------
 # GitHub release helpers
 # ---------------------------------------------------------------------------
+# If GITHUB_TOKEN is set in the environment, pass it as a Bearer token to
+# raise the GitHub API rate limit from 60 to 5000 requests per hour.
+github_curl() {
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" "$@"
+    else
+        curl -fsSL "$@"
+    fi
+}
 
 # Print the browser_download_url of the first release asset whose filename
 # matches PATTERN (case-insensitive) from the latest release of REPO.
 get_latest_release_url() {
     local repo="$1"
     local pattern="$2"
-    curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+    github_curl "https://api.github.com/repos/${repo}/releases/latest" \
         | grep '"browser_download_url"' \
         | grep -i "${pattern}" \
         | head -1 \
@@ -199,7 +208,7 @@ get_latest_release_url() {
 # Print the tag_name of the latest release of REPO.
 get_latest_release_tag() {
     local repo="$1"
-    curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+    github_curl "https://api.github.com/repos/${repo}/releases/latest" \
         | grep '"tag_name"' \
         | head -1 \
         | sed 's/.*"tag_name": "\([^"]*\)".*/\1/'
@@ -321,27 +330,27 @@ else
     curl -fsSL --progress-bar -o "${TMPASSET}" "${MEL_URL}"
 
     # Determine asset format and install the binary.
+    # move_binary_to_dest: after extraction, locate the binary if not at MEL_BIN yet.
+    move_binary_to_dest() {
+        if [[ ! -f "${MEL_BIN}" ]]; then
+            local found
+            found="$(find "${MINEDLAUNCHER_INSTALL_DIR}" -type f \
+                        -name "min-ed-launcher" ! -name "*.version" | head -1)"
+            if [[ -n "${found}" && "${found}" != "${MEL_BIN}" ]]; then
+                mv "${found}" "${MEL_BIN}"
+            fi
+        fi
+    }
+
     if [[ "${MEL_URL}" == *.tar.gz || "${MEL_URL}" == *.tgz ]]; then
         step "Extracting tar archive…"
         tar -xzf "${TMPASSET}" -C "${MINEDLAUNCHER_INSTALL_DIR}"
         # The binary may be nested inside a subdirectory.
-        if [[ ! -f "${MEL_BIN}" ]]; then
-            FOUND="$(find "${MINEDLAUNCHER_INSTALL_DIR}" -type f \
-                        -name "min-ed-launcher" ! -name "*.version" | head -1)"
-            if [[ -n "${FOUND}" && "${FOUND}" != "${MEL_BIN}" ]]; then
-                mv "${FOUND}" "${MEL_BIN}"
-            fi
-        fi
+        move_binary_to_dest
     elif [[ "${MEL_URL}" == *.zip ]]; then
         step "Extracting zip archive…"
         unzip -q -o "${TMPASSET}" -d "${MINEDLAUNCHER_INSTALL_DIR}"
-        if [[ ! -f "${MEL_BIN}" ]]; then
-            FOUND="$(find "${MINEDLAUNCHER_INSTALL_DIR}" -type f \
-                        -name "min-ed-launcher" ! -name "*.version" | head -1)"
-            if [[ -n "${FOUND}" && "${FOUND}" != "${MEL_BIN}" ]]; then
-                mv "${FOUND}" "${MEL_BIN}"
-            fi
-        fi
+        move_binary_to_dest
     else
         # Raw binary (no archive)
         step "Installing binary…"
@@ -417,10 +426,12 @@ EOF
     fi
 
     # A srvsurvey.sh entry from a previous (different-path) install exists —
-    # update the path in-place.
+    # update the path in-place.  The pattern targets only actual path = "…"
+    # assignment lines so that comment lines are never accidentally replaced.
     if grep -q "srvsurvey\.sh" "${MEL_CONFIG}"; then
         step "Updating existing srvsurvey.sh path in settings.toml…"
-        sed -i "s|.*srvsurvey\.sh.*|${entry_path_line}|" "${MEL_CONFIG}"
+        sed -i "s|^[[:space:]]*path[[:space:]]*=.*srvsurvey\.sh.*|${entry_path_line}|" \
+            "${MEL_CONFIG}"
         ok "Updated srvsurvey.sh path in ${MEL_CONFIG}"
         return
     fi

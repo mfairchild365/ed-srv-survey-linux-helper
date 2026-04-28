@@ -79,10 +79,10 @@ Run `./install.sh` again at any time. Versions that are already current are skip
 After running the installer, open Steam, right-click **Elite Dangerous → Properties → General**, and set the **Launch Options** to the path printed by the installer, for example:
 
 ```
-~/.local/share/ed-srv-survey-helper/min-ed-launcher/min-ed-launcher %command%
+/home/youruser/.local/share/ed-srv-survey-helper/min-ed-launcher/min-ed-launcher %command%
 ```
 
-Then launch Elite through Steam as normal — ED Mini Launcher will start SrvSurvey automatically.
+Replace `/home/youruser` with your actual home directory path (or copy the exact path the installer prints). Using `~` directly in Steam's launch options field may not expand correctly in all Steam client versions.
 
 ---
 
