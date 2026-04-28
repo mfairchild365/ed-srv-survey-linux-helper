@@ -1,0 +1,229 @@
+# ed-srv-survey-linux-helper
+
+A helper script and setup guide for running [SrvSurvey](https://github.com/njthomson/SrvSurvey) alongside [Elite Dangerous](https://www.elitedangerous.com/) on Linux via Proton.
+
+---
+
+## What is this?
+
+[SrvSurvey](https://github.com/njthomson/SrvSurvey) is a C# WinForms companion app for Elite Dangerous that provides on-screen overlay assistance for organic scans, ground target tracking, Guardian sites, and more. It reads the game's journal files and renders transparent overlay windows on top of the game.
+
+This repo provides:
+
+- **`srvsurvey.sh`** — a launcher script that [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher) will invoke as a companion app inside Elite's Proton session.
+- This **README** with step-by-step setup instructions.
+
+---
+
+## Why does this approach work?
+
+SrvSurvey **must** run inside the same Proton/Wine session as Elite Dangerous for its overlays to function. Here's why:
+
+- Wine emulates a virtual Win32 desktop. All processes that share the same Wine server share the same window system.
+- When SrvSurvey and Elite run in the same Wine session, SrvSurvey can discover Elite's process via `Process.GetProcessesByName("EliteDangerous64")`.
+- Win32 window handles (HWNDs) are valid across processes within the same Wine server, so SrvSurvey can parent its transparent overlay windows directly to Elite's game window — exactly as it does on native Windows.
+
+If SrvSurvey runs in a **separate** Wine instance (e.g., standalone via system Wine), it cannot attach overlays to Elite's window.
+
+[ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher) solves this: it replaces the official Frontier launcher and can launch companion apps (like `srvsurvey.sh`) **within the same Proton session** as Elite.
+
+```
+Steam launches Elite via Proton
+  └─ Proton starts the Wine session
+       └─ ED Mini Launcher runs (inside Wine/Proton)
+            ├─ Launches Elite Dangerous  (same Wine session)
+            └─ Launches srvsurvey.sh    (same Wine session)
+                 └─ wine SrvSurvey.exe -linux
+                      └─ Overlays parent to Elite's HWND ✅
+```
+
+---
+
+## Prerequisites
+
+- A Linux distro (tested on CachyOS/KDE Plasma; should work on Bazzite, other Arch-based, Fedora, Ubuntu, etc.)
+- Steam with **Proton Experimental** (or another Proton version ≥ 8)
+- Elite Dangerous installed via Steam and **run at least once** (to create the Proton prefix)
+- [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher) installed and configured ([installation instructions](https://github.com/rfvgyhn/min-ed-launcher#installation))
+- The latest [SrvSurvey release](https://github.com/njthomson/SrvSurvey/releases) — download the `.zip` archive (not the Windows Store / ClickOnce version)
+
+---
+
+## Step-by-step installation
+
+### 1. Install and run Elite Dangerous at least once
+
+Open Steam, select Elite Dangerous → Properties → Compatibility, enable **Proton Experimental**, and launch the game once. You can exit immediately. This creates the Proton prefix that SrvSurvey will use.
+
+### 2. Install ED Mini Launcher
+
+Follow the [ED Mini Launcher installation instructions](https://github.com/rfvgyhn/min-ed-launcher#installation). The recommended approach is to download the latest release binary and place it where Steam will invoke it instead of the official launcher.
+
+Verify it works by launching Elite through Steam — you should see ED Mini Launcher's output in the terminal/log.
+
+### 3. Download and extract SrvSurvey
+
+1. Go to [SrvSurvey releases](https://github.com/njthomson/SrvSurvey/releases) and download the latest `.zip` file (e.g., `SrvSurvey.zip`).
+2. Extract it to a location you'll remember, for example:
+
+   ```bash
+   mkdir -p ~/Games/SrvSurvey
+   unzip ~/Downloads/SrvSurvey.zip -d ~/Games/SrvSurvey
+   ```
+
+### 4. Download this repo and place `srvsurvey.sh`
+
+Clone or download this repo:
+
+```bash
+git clone https://github.com/mfairchild365/ed-srv-survey-linux-helper.git ~/Games/ed-srv-survey-linux-helper
+```
+
+The script can live anywhere. Two convenient locations:
+
+- **Next to SrvSurvey** (uses default path detection):
+
+  ```bash
+  cp ~/Games/ed-srv-survey-linux-helper/srvsurvey.sh ~/Games/SrvSurvey/srvsurvey.sh
+  ```
+
+- **Anywhere else** (pass the SrvSurvey directory as an argument in the ED Mini Launcher config).
+
+### 5. Make the script executable
+
+```bash
+chmod +x ~/Games/SrvSurvey/srvsurvey.sh
+# or wherever you placed it:
+chmod +x ~/Games/ed-srv-survey-linux-helper/srvsurvey.sh
+```
+
+### 6. Configure ED Mini Launcher
+
+ED Mini Launcher is configured via a TOML file. Its default location is:
+
+```
+~/.config/min-ed-launcher/settings.toml
+```
+
+Add an `autorun` entry pointing to `srvsurvey.sh`. Pass the path to your SrvSurvey directory as the argument if the script is not placed next to `SrvSurvey.exe`:
+
+```toml
+[autorun]
+# Launch SrvSurvey as a companion app inside Elite's Proton session.
+# The script path must be absolute.
+[autorun.entries]
+
+[[autorun.entries]]
+  path = "/home/youruser/Games/SrvSurvey/srvsurvey.sh"
+  # If the script is NOT in the SrvSurvey directory, pass the directory as an argument:
+  # args = ["/home/youruser/Games/SrvSurvey"]
+```
+
+> **Note:** ED Mini Launcher's exact config format may vary between versions. Refer to the [ED Mini Launcher documentation](https://github.com/rfvgyhn/min-ed-launcher#configuration) for the authoritative reference. The key point is to add `srvsurvey.sh` as a program that ED Mini Launcher will launch alongside Elite.
+
+### 7. Launch Elite Dangerous through Steam
+
+Start Elite normally through Steam. ED Mini Launcher will:
+
+1. Launch Elite Dangerous.
+2. After the configured delay (`SRVSURVEY_DELAY`, default 15 seconds), launch SrvSurvey inside the same Proton session.
+
+SrvSurvey will appear over Elite once it has finished loading.
+
+---
+
+## Configuration
+
+| Variable / Parameter | Default | Description |
+|---|---|---|
+| `SRVSURVEY_DELAY` (env var) | `15` | Seconds to wait before launching SrvSurvey. Increase if Elite fails to start. Set to `0` to disable. |
+| First argument to script | `<script dir>/SrvSurvey` | Path to the SrvSurvey installation directory. |
+
+### Setting `SRVSURVEY_DELAY`
+
+You can export the variable in your shell profile, or set it in ED Mini Launcher's environment configuration:
+
+```bash
+export SRVSURVEY_DELAY=20
+```
+
+Or modify the default directly in `srvsurvey.sh` (the line `DELAY="${SRVSURVEY_DELAY:-15}"`).
+
+---
+
+## How it works (technical)
+
+### Proton session sharing
+
+When Steam launches a game with Proton, it starts a Wine server (`wineserver`) for that game's Proton prefix. ED Mini Launcher runs inside that same Wine server, and so do any companion apps it spawns. This means SrvSurvey runs in the **same virtual Win32 environment** as Elite — they share:
+
+- The virtual Win32 desktop (managed by Wine's `user32.dll`)
+- The process table (SrvSurvey can enumerate Elite's process)
+- The window handle (HWND) namespace (overlay windows can be parented to Elite's HWND)
+
+### Why the sleep delay is necessary
+
+Proton/Wine initialises resources as processes start. If SrvSurvey starts before Elite has completed its own initialisation, the competition for Wine resources (especially the D3D renderer) can cause Elite's launch to fail. The delay gives Elite time to get past its splash/intro sequence before SrvSurvey starts.
+
+### SrvSurvey Linux detection
+
+SrvSurvey automatically detects that it is running under Wine/Linux by checking whether the `WINELOADER` environment variable is set (which Proton always sets). The `-linux` flag passed by this script is an explicit fallback that forces the same code path, guarding against edge cases. When `isLinux` is `true`, SrvSurvey activates Linux-specific behaviours such as opening links with `xdg-open` and skipping auto-update.
+
+---
+
+## Known issues / caveats
+
+| Issue | Notes |
+|---|---|
+| **SrvSurvey starts before Elite → Elite fails to launch** | Mitigated by the sleep delay. Increase `SRVSURVEY_DELAY` if needed. |
+| **SrvSurvey pops up during Elite's intro videos** | This is expected — the delay is not long enough to wait for the main menu. Clicking on the Elite window skips the intro videos and restores focus. |
+| **Exiting the game** | ED Mini Launcher may not detect that Elite has closed. Use **Ctrl+C** in the launcher's terminal and **Quit** inside SrvSurvey to exit cleanly. |
+| **Emoji rendering is broken** | A known Wine/font limitation. Emoji in SrvSurvey's UI will appear as boxes or missing glyphs. |
+| **Gamescope (Bazzite Game Mode / SteamOS)** | Gamescope does not composite external windows on top of the focused game. Overlays will only work in **Desktop Mode**, not Game Mode. Running Elite in a window outside Gamescope is the workaround. |
+| **Other Proton versions** | The script tries to auto-detect the Proton Wine binary. If you use a version not covered by the auto-detection logic, set `WINELOADER` manually or edit the script. Alternatively, use [Proton-Shim](https://gitlab.com/Wisher/ProtonShim) to generate a compatible wrapper. |
+
+---
+
+## Troubleshooting
+
+### SrvSurvey can't find journal files
+
+- Ensure Elite Dangerous has been run **at least once** via Steam with Proton. This creates the Proton prefix and the `Saved Games` directory inside it.
+- The journal path inside the Proton prefix is: `~/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/steamuser/Saved Games/Frontier Developments/Elite Dangerous/`
+- In SrvSurvey's settings, verify the journal folder points to the path above (or the equivalent inside your Steam library path).
+
+### Overlays don't appear on top of Elite
+
+- Confirm both Elite and SrvSurvey are running in the same Proton session (launched via ED Mini Launcher).
+- In SrvSurvey settings, make sure **`disableWindowParentIsGame`** is **not** enabled (it should be `false` for same-session operation).
+- If running in Gamescope (Bazzite Game Mode), switch to Desktop Mode.
+
+### Elite doesn't launch / crashes on startup
+
+- Increase the sleep delay: set `SRVSURVEY_DELAY=30` (or higher) in your environment or ED Mini Launcher config.
+
+### Script can't find the Wine/Proton binary
+
+- Check that ED Mini Launcher is setting `WINELOADER`. You can add a debug line to the script: `echo "WINELOADER=${WINELOADER:-unset}" >&2`
+- Alternatively, set `WINELOADER` manually to the full path of your Proton `wine64` binary before launching Steam/ED Mini Launcher.
+
+### `Permission denied` when running the script
+
+```bash
+chmod +x /path/to/srvsurvey.sh
+```
+
+---
+
+## Credits
+
+- [**njthomson**](https://github.com/njthomson) — creator of [SrvSurvey](https://github.com/njthomson/SrvSurvey)
+- [**Maldor**](https://github.com/njthomson/SrvSurvey/discussions/524) — original Linux setup documented in SrvSurvey discussion #524, which this is based on
+- [**rfvgyhn**](https://github.com/rfvgyhn/min-ed-launcher) — creator of [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher)
+- [**Wisher**](https://gitlab.com/Wisher/ProtonShim) — [Proton-Shim](https://gitlab.com/Wisher/ProtonShim), inspiration for the script generation approach
+
+---
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).
