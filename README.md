@@ -10,6 +10,7 @@ A helper script and setup guide for running [SrvSurvey](https://github.com/njtho
 
 This repo provides:
 
+- **`install.sh`** — an automated installer / updater that downloads SrvSurvey and ED Mini Launcher, wires them together, and tells you the one remaining manual step.
 - **`srvsurvey.sh`** — a launcher script that [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher) will invoke as a companion app inside Elite's Proton session.
 - This **README** with step-by-step setup instructions.
 
@@ -44,12 +45,48 @@ Steam launches Elite via Proton
 - A Linux distro (tested on CachyOS/KDE Plasma; should work on Bazzite, other Arch-based, Fedora, Ubuntu, etc.)
 - Steam with **Proton Experimental** (or another Proton version ≥ 8)
 - Elite Dangerous installed via Steam and **run at least once** (to create the Proton prefix)
-- [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher) installed and configured ([installation instructions](https://github.com/rfvgyhn/min-ed-launcher#installation))
-- The latest [SrvSurvey release](https://github.com/njthomson/SrvSurvey/releases) — download the `.zip` archive (not the Windows Store / ClickOnce version)
+- `curl` and `unzip` available on the system
 
 ---
 
-## Step-by-step installation
+## Quick start (automated installer)
+
+`install.sh` handles everything except the one Steam UI step that cannot be automated:
+
+```bash
+# Clone the repo and run the installer
+git clone https://github.com/mfairchild365/ed-srv-survey-linux-helper.git
+cd ed-srv-survey-linux-helper
+./install.sh
+```
+
+The script will:
+
+1. Download the latest [SrvSurvey](https://github.com/njthomson/SrvSurvey/releases) release and extract it.
+2. Download the latest [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher/releases) Linux binary.
+3. Place `srvsurvey.sh` next to `SrvSurvey.exe`.
+4. Create / update `~/.config/min-ed-launcher/settings.toml` with the autorun entry for `srvsurvey.sh`.
+5. Print the one remaining manual step: setting the Steam launch option.
+
+Everything is installed under `~/.local/share/ed-srv-survey-helper/` by default. Pass `--install-dir /your/path` to choose a different location.
+
+### Updating
+
+Run `./install.sh` again at any time. Versions that are already current are skipped; only newer releases are downloaded.
+
+### One manual step
+
+After running the installer, open Steam, right-click **Elite Dangerous → Properties → General**, and set the **Launch Options** to the path printed by the installer, for example:
+
+```
+~/.local/share/ed-srv-survey-helper/min-ed-launcher/min-ed-launcher %command%
+```
+
+Then launch Elite through Steam as normal — ED Mini Launcher will start SrvSurvey automatically.
+
+---
+
+## Step-by-step installation (manual)
 
 ### 1. Install and run Elite Dangerous at least once
 
