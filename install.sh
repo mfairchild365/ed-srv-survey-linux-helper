@@ -500,9 +500,12 @@ for process in processes:
         if process.get('fileName') != script_path:
             process['fileName'] = script_path
             updated = True
+        if process.get('keepOpen') is not True:
+            process['keepOpen'] = True
+            updated = True
 
 if not found:
-    processes.append({'fileName': script_path})
+    processes.append({'fileName': script_path, 'keepOpen': True})
     updated = True
 
 data['processes'] = processes
@@ -547,9 +550,9 @@ PY
 
 detect_terminal_prefix() {
     if command -v ptyxis &>/dev/null; then
-        echo 'LD_LIBRARY_PATH="" ptyxis -- env LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
+        echo 'LD_LIBRARY_PATH="" ptyxis -- env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
     elif command -v konsole &>/dev/null; then
-        echo 'LD_LIBRARY_PATH="" konsole -e env LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
+        echo 'LD_LIBRARY_PATH="" konsole -e env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
     elif command -v gnome-terminal &>/dev/null; then
         echo 'gnome-terminal --'
     elif command -v alacritty &>/dev/null; then

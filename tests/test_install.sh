@@ -316,6 +316,7 @@ test_fresh_install_creates_files() {
     assert_file_exists "${install_dir}/min-ed-launcher/min-ed-launcher"
         assert_file_exists "${home_dir}/.config/min-ed-launcher/settings.json"
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"processes": ['
+            assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"keepOpen": true'
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
     assert_file_contains "${install_dir}/SrvSurvey/.installed-version" "v1.2.3"
     assert_file_contains "${install_dir}/min-ed-launcher/.installed-version" "v4.5.6"
@@ -345,6 +346,7 @@ EOF
 
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"language": "en"'
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+            assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"keepOpen": true'
         assert_file_not_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/old/location/srvsurvey.sh"'
         pass "existing srvsurvey process path updates in settings.json"
 }
@@ -373,6 +375,7 @@ EOF
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"gameStartDelay": 2'
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/usr/bin/existing-helper"'
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+            assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"keepOpen": true'
         pass "srvsurvey process entry appends to existing settings.json"
 }
 

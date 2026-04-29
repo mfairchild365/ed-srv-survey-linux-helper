@@ -178,8 +178,8 @@ Start Elite normally through Steam using a launch option such as one of these:
 ```bash
 gnome-terminal -- /path/to/min-ed-launcher %command% /autorun /autoquit
 alacritty -e /path/to/min-ed-launcher %command% /autorun /autoquit
-LD_LIBRARY_PATH="" konsole -e env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
-LD_LIBRARY_PATH="" ptyxis -- env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
+LD_LIBRARY_PATH="" konsole -e env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
+LD_LIBRARY_PATH="" ptyxis -- env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
 ```
 
 ED Mini Launcher will then:
@@ -188,6 +188,8 @@ ED Mini Launcher will then:
 2. After the configured delay (`SRVSURVEY_DELAY`, default 15 seconds), launch SrvSurvey inside the same Proton session.
 
 SrvSurvey will appear over Elite once it has finished loading.
+
+The installer marks the SrvSurvey helper process with `keepOpen: true` so it is not terminated when `min-ed-launcher` exits via `/autoquit` after the game starts.
 
 ---
 
@@ -238,6 +240,7 @@ SrvSurvey automatically detects that it is running under Wine/Linux by checking 
 | **SrvSurvey pops up during Elite's intro videos** | This is expected — the delay is not long enough to wait for the main menu. Clicking on the Elite window skips the intro videos and restores focus. |
 | **Exiting the game** | ED Mini Launcher may not detect that Elite has closed. Use **Ctrl+C** in the launcher's terminal and **Quit** inside SrvSurvey to exit cleanly. |
 | **Emoji rendering is broken** | A known Wine/font limitation. Emoji in SrvSurvey's UI will appear as boxes or missing glyphs. |
+| **Bazzite / Steam runtime `LD_PRELOAD` warnings** | `srvsurvey.sh` now clears `LD_PRELOAD` and restores host libraries from `MEL_LD_LIBRARY_PATH` before launching Wine, which avoids common `libextest.so` wrong-ELF-class warnings. |
 | **Gamescope (Bazzite Game Mode / SteamOS)** | Gamescope does not composite external windows on top of the focused game. Overlays will only work in **Desktop Mode**, not Game Mode. Running Elite in a window outside Gamescope is the workaround. |
 | **Other Proton versions** | The script tries to auto-detect the Proton Wine binary. If you use a version not covered by the auto-detection logic, set `WINELOADER` manually or edit the script. Alternatively, use [Proton-Shim](https://gitlab.com/Wisher/ProtonShim) to generate a compatible wrapper. |
 
@@ -256,6 +259,13 @@ SrvSurvey automatically detects that it is running under Wine/Linux by checking 
 - Confirm both Elite and SrvSurvey are running in the same Proton session (launched via ED Mini Launcher).
 - In SrvSurvey settings, make sure **`disableWindowParentIsGame`** is **not** enabled (it should be `false` for same-session operation).
 - If running in Gamescope (Bazzite Game Mode), switch to Desktop Mode.
+
+### SrvSurvey doesn't open at all
+
+- Check the helper log at `~/.local/state/ed-srv-survey-helper/srvsurvey.log`.
+- Check `min-ed-launcher`'s log at `~/.local/state/min-ed-launcher/min-ed-launcher.log`.
+- On Bazzite/KDE/Ptyxis/Konsole, prefer the launch option variants above that reset Steam's runtime `LD_LIBRARY_PATH` and pass `MEL_LD_LIBRARY_PATH` into the terminal session.
+- If you see `libextest.so` wrong-ELF-class warnings, rerun `./install.sh` so it prints the updated launch command and rewrites the helper process entry with `keepOpen: true`.
 
 ### Elite doesn't launch / crashes on startup
 

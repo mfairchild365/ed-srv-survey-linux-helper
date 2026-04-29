@@ -42,6 +42,12 @@ assert_wine_arg_present() {
     fi
 }
 
+assert_wine_log_contains() {
+    local log_file="$1"
+    local expected="$2"
+    grep -Fq "$expected" "$log_file" || fail "expected '$expected' in $log_file"
+}
+
 make_temp_dir() {
     local tmp_base="${TMPDIR:-/tmp}"
     mktemp -d "${tmp_base%/}/srvsurvey-test-XXXXXX"
@@ -61,6 +67,8 @@ write_wine_stub() {
 set -euo pipefail
 {
     printf 'argv0=%s\n' "$0"
+    printf 'env_LD_PRELOAD=%s\n' "${LD_PRELOAD-__unset__}"
+    printf 'env_LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH-__unset__}"
     for arg in "$@"; do
         printf 'arg=%s\n' "$arg"
     done
@@ -192,6 +200,38 @@ EOF
     pass "falls back to system wine64 and honors delay"
 }
 
+test_sanitizes_steam_runtime_environment() {
+    local setup
+    setup="$(prepare_env sanitize-env)"
+    local launcher_dir srv_dir bin_dir steamapps_dir compat_dir
+    IFS='|' read -r TEST_TMP_ROOT launcher_dir srv_dir bin_dir steamapps_dir compat_dir <<< "${setup}"
+
+    local wine_log="${TEST_TMP_ROOT}/wine.log"
+    local output_file="${TEST_TMP_ROOT}/stdout.log"
+    local log_file="${TEST_TMP_ROOT}/home/.local/state/ed-srv-survey-helper/srvsurvey.log"
+
+    mkdir -p "${TEST_TMP_ROOT}/home"
+    write_wine_stub "${bin_dir}/wine64"
+
+    (
+        export HOME="${TEST_TMP_ROOT}/home"
+        export PATH="${bin_dir}:${PATH}"
+        export SRV_TEST_WINE_LOG="${wine_log}"
+        export SRVSURVEY_DELAY=0
+        export LD_PRELOAD="/usr/lib/extest/libextest.so"
+        export LD_LIBRARY_PATH="/steam/runtime/lib"
+        export MEL_LD_LIBRARY_PATH="/host/runtime/lib"
+        bash "${launcher_dir}/srvsurvey.sh"
+    ) > "${output_file}" 2>&1
+
+    assert_file_exists "${log_file}"
+    assert_output_contains "${output_file}" "Clearing LD_PRELOAD for helper launch"
+    assert_output_contains "${output_file}" "Restoring host LD_LIBRARY_PATH from MEL_LD_LIBRARY_PATH"
+    assert_wine_log_contains "${wine_log}" 'env_LD_PRELOAD=__unset__'
+    assert_wine_log_contains "${wine_log}" 'env_LD_LIBRARY_PATH=/host/runtime/lib'
+    pass "sanitizes Steam runtime environment before launching Wine"
+}
+
 test_errors_when_srvsurvey_dir_missing() {
     local setup
     setup="$(prepare_env missing-dir)"
@@ -236,6 +276,8 @@ main() {
     test_uses_steam_compat_proton_wine
     TESTS_RUN=$((TESTS_RUN + 1))
     test_falls_back_to_system_wine64_and_honors_delay
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_sanitizes_steam_runtime_environment
     TESTS_RUN=$((TESTS_RUN + 1))
     test_errors_when_srvsurvey_dir_missing
     TESTS_RUN=$((TESTS_RUN + 1))

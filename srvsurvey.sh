@@ -22,6 +22,31 @@
 
 set -euo pipefail
 
+LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/ed-srv-survey-helper"
+LOG_FILE="${LOG_DIR}/srvsurvey.log"
+mkdir -p "${LOG_DIR}"
+
+log() {
+    echo "[srvsurvey.sh] $*"
+}
+
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+sanitize_runtime_env() {
+    if [[ -n "${LD_PRELOAD:-}" ]]; then
+        log "Clearing LD_PRELOAD for helper launch: ${LD_PRELOAD}"
+        unset LD_PRELOAD
+    fi
+
+    if [[ -n "${MEL_LD_LIBRARY_PATH:-}" ]]; then
+        log "Restoring host LD_LIBRARY_PATH from MEL_LD_LIBRARY_PATH"
+        export LD_LIBRARY_PATH="${MEL_LD_LIBRARY_PATH}"
+    fi
+}
+
+log "Logging to ${LOG_FILE}"
+sanitize_runtime_env
+
 # ---------------------------------------------------------------------------
 # 1. Locate the SrvSurvey installation directory
 # ---------------------------------------------------------------------------
@@ -38,17 +63,17 @@ fi
 SRVSURVEY_EXE="${SRVSURVEY_DIR}/SrvSurvey.exe"
 
 if [[ ! -d "${SRVSURVEY_DIR}" ]]; then
-    echo "[srvsurvey.sh] ERROR: SrvSurvey directory not found: ${SRVSURVEY_DIR}" >&2
-    echo "[srvsurvey.sh] Pass the path as the first argument, or place SrvSurvey" >&2
-    echo "[srvsurvey.sh] in a 'SrvSurvey' folder next to this script." >&2
+    log "ERROR: SrvSurvey directory not found: ${SRVSURVEY_DIR}"
+    log "Pass the path as the first argument, or place SrvSurvey"
+    log "in a 'SrvSurvey' folder next to this script."
     exit 1
 fi
 
 if [[ ! -f "${SRVSURVEY_EXE}" ]]; then
-    echo "[srvsurvey.sh] ERROR: SrvSurvey.exe not found in: ${SRVSURVEY_DIR}" >&2
-    echo "[srvsurvey.sh] Download the latest SrvSurvey .zip release from:" >&2
-    echo "[srvsurvey.sh]   https://github.com/njthomson/SrvSurvey/releases" >&2
-    echo "[srvsurvey.sh] and extract it to: ${SRVSURVEY_DIR}" >&2
+    log "ERROR: SrvSurvey.exe not found in: ${SRVSURVEY_DIR}"
+    log "Download the latest SrvSurvey .zip release from:"
+    log "  https://github.com/njthomson/SrvSurvey/releases"
+    log "and extract it to: ${SRVSURVEY_DIR}"
     exit 1
 fi
 
@@ -65,7 +90,7 @@ fi
 DELAY="${SRVSURVEY_DELAY:-15}"
 
 if [[ "${DELAY}" -gt 0 ]]; then
-    echo "[srvsurvey.sh] Waiting ${DELAY}s for Elite Dangerous to start …"
+    log "Waiting ${DELAY}s for Elite Dangerous to start …"
     sleep "${DELAY}"
 fi
 
@@ -129,14 +154,14 @@ find_wine() {
 WINE="$(find_wine)"
 
 if [[ -z "${WINE}" ]]; then
-    echo "[srvsurvey.sh] ERROR: Could not locate a Wine or Proton binary." >&2
-    echo "[srvsurvey.sh] Ensure that WINELOADER is set by ED Mini Launcher, or" >&2
-    echo "[srvsurvey.sh] that system Wine is installed (wine / wine64)." >&2
+    log "ERROR: Could not locate a Wine or Proton binary."
+    log "Ensure that WINELOADER is set by ED Mini Launcher, or"
+    log "that system Wine is installed (wine / wine64)."
     exit 1
 fi
 
-echo "[srvsurvey.sh] Using Wine binary: ${WINE}"
-echo "[srvsurvey.sh] Launching SrvSurvey from: ${SRVSURVEY_EXE}"
+log "Using Wine binary: ${WINE}"
+log "Launching SrvSurvey from: ${SRVSURVEY_EXE}"
 
 # ---------------------------------------------------------------------------
 # 4. Launch SrvSurvey
