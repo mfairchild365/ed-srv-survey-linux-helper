@@ -45,7 +45,7 @@ Steam launches Elite via Proton
 - A Linux distro (tested on CachyOS/KDE Plasma; should work on Bazzite, other Arch-based, Fedora, Ubuntu, etc.)
 - Steam with **Proton Experimental** (or another Proton version ≥ 8)
 - Elite Dangerous installed via Steam and **run at least once** (to create the Proton prefix)
-- `curl` and `unzip` available on the system
+- `curl`, `unzip`, and `python3` available on the system
 
 ---
 
@@ -65,8 +65,8 @@ The script will:
 1. Download the latest [SrvSurvey](https://github.com/njthomson/SrvSurvey/releases) release and extract it.
 2. Download the latest [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher/releases) Linux binary.
 3. Place `srvsurvey.sh` next to `SrvSurvey.exe`.
-4. Create / update `~/.config/min-ed-launcher/settings.toml` with the autorun entry for `srvsurvey.sh`.
-5. Print the one remaining manual step: setting the Steam launch option.
+4. Create / update `~/.config/min-ed-launcher/settings.json` with a `processes` entry for `srvsurvey.sh`.
+5. Print the one remaining manual step: setting the Steam launch option with `min-ed-launcher`'s recommended Linux arguments.
 
 Everything is installed under `~/.local/share/ed-srv-survey-helper/` by default. Pass `--install-dir /your/path` to choose a different location.
 
@@ -91,13 +91,13 @@ Continuous integration runs `shellcheck` plus both test suites on GitHub Actions
 
 ### One manual step
 
-After running the installer, open Steam, right-click **Elite Dangerous → Properties → General**, and set the **Launch Options** to the path printed by the installer, for example:
+After running the installer, open Steam, right-click **Elite Dangerous → Properties → General**, and set the **Launch Options** to the command printed by the installer, for example:
 
 ```
-/home/youruser/.local/share/ed-srv-survey-helper/min-ed-launcher/min-ed-launcher %command%
+gnome-terminal -- /home/youruser/.local/share/ed-srv-survey-helper/min-ed-launcher/min-ed-launcher %command% /autorun /autoquit
 ```
 
-Replace `/home/youruser` with your actual home directory path (or copy the exact path the installer prints). Using `~` directly in Steam's launch options field may not expand correctly in all Steam client versions.
+Replace `/home/youruser` with your actual home directory path (or copy the exact command the installer prints). Using `~` directly in Steam's launch options field may not expand correctly in all Steam client versions.
 
 ---
 
@@ -151,31 +151,38 @@ chmod +x ~/Games/ed-srv-survey-linux-helper/srvsurvey.sh
 
 ### 6. Configure ED Mini Launcher
 
-ED Mini Launcher is configured via a TOML file. Its default location is:
+ED Mini Launcher is configured via a JSON file. Its default location is:
 
 ```
-~/.config/min-ed-launcher/settings.toml
+~/.config/min-ed-launcher/settings.json
 ```
 
-Add an `autorun` entry pointing to `srvsurvey.sh`. Pass the path to your SrvSurvey directory as the argument if the script is not placed next to `SrvSurvey.exe`:
+Add a `processes` entry pointing to `srvsurvey.sh`. The installer writes this automatically; if you need to do it manually, add `srvsurvey.sh` as an extra process like this:
 
-```toml
-[autorun]
-# Launch SrvSurvey as a companion app inside Elite's Proton session.
-# The script path must be absolute.
-[autorun.entries]
-
-[[autorun.entries]]
-  path = "/home/youruser/Games/SrvSurvey/srvsurvey.sh"
-  # If the script is NOT in the SrvSurvey directory, pass the directory as an argument:
-  # args = ["/home/youruser/Games/SrvSurvey"]
+```json
+{
+  "processes": [
+    {
+      "fileName": "/home/youruser/Games/SrvSurvey/srvsurvey.sh"
+    }
+  ]
+}
 ```
 
-> **Note:** ED Mini Launcher's exact config format may vary between versions. Refer to the [ED Mini Launcher documentation](https://github.com/rfvgyhn/min-ed-launcher#configuration) for the authoritative reference. The key point is to add `srvsurvey.sh` as a program that ED Mini Launcher will launch alongside Elite.
+> **Note:** `min-ed-launcher`'s settings file is `settings.json`, not `settings.toml`. Refer to the [ED Mini Launcher documentation](https://github.com/rfvgyhn/min-ed-launcher#configuration) for the authoritative reference. The key point is to add `srvsurvey.sh` as a process that the launcher starts alongside Elite.
 
 ### 7. Launch Elite Dangerous through Steam
 
-Start Elite normally through Steam. ED Mini Launcher will:
+Start Elite normally through Steam using a launch option such as one of these:
+
+```bash
+gnome-terminal -- /path/to/min-ed-launcher %command% /autorun /autoquit
+alacritty -e /path/to/min-ed-launcher %command% /autorun /autoquit
+LD_LIBRARY_PATH="" konsole -e env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
+LD_LIBRARY_PATH="" ptyxis -- env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" /path/to/min-ed-launcher %command% /autorun /autoquit
+```
+
+ED Mini Launcher will then:
 
 1. Launch Elite Dangerous.
 2. After the configured delay (`SRVSURVEY_DELAY`, default 15 seconds), launch SrvSurvey inside the same Proton session.

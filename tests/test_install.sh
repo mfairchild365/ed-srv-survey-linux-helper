@@ -34,6 +34,12 @@ assert_file_not_contains() {
     fi
 }
 
+assert_output_contains() {
+    local output_file="$1"
+    local expected="$2"
+    grep -Fq "$expected" "$output_file" || fail "expected '$expected' in $output_file"
+}
+
 make_temp_dir() {
     local tmp_base="${TMPDIR:-/tmp}"
     mktemp -d "${tmp_base%/}/install-test-XXXXXX"
@@ -308,65 +314,74 @@ test_fresh_install_creates_files() {
     assert_file_exists "${install_dir}/SrvSurvey/SrvSurvey.exe"
     assert_file_exists "${install_dir}/SrvSurvey/srvsurvey.sh"
     assert_file_exists "${install_dir}/min-ed-launcher/min-ed-launcher"
-    assert_file_exists "${home_dir}/.config/min-ed-launcher/settings.toml"
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "path = \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+        assert_file_exists "${home_dir}/.config/min-ed-launcher/settings.json"
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"processes": ['
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
     assert_file_contains "${install_dir}/SrvSurvey/.installed-version" "v1.2.3"
     assert_file_contains "${install_dir}/min-ed-launcher/.installed-version" "v4.5.6"
+        assert_output_contains "${TEST_TMP_ROOT}/fresh.log" "%command% /autorun /autoquit"
     pass "fresh install creates expected files"
 }
 
-test_existing_path_updates_with_bsd_sed() {
+test_existing_process_path_updates_in_json() {
     local setup
-    setup="$(prepare_env bsd-sed)"
+        setup="$(prepare_env update-json)"
     local home_dir install_dir bin_dir
     IFS='|' read -r TEST_TMP_ROOT home_dir install_dir bin_dir <<< "${setup}"
 
     mkdir -p "${home_dir}/.config/min-ed-launcher"
-    cat > "${home_dir}/.config/min-ed-launcher/settings.toml" <<'EOF'
-[autorun]
-
-[[autorun.entries]]
-  path = "/old/location/srvsurvey.sh"
-# path = "/comment/location/srvsurvey.sh"
+        cat > "${home_dir}/.config/min-ed-launcher/settings.json" <<'EOF'
+{
+    "language": "en",
+    "processes": [
+        {
+            "fileName": "/old/location/srvsurvey.sh"
+        }
+    ]
+}
 EOF
 
-    run_install "${home_dir}" "${install_dir}" "${bin_dir}" bsd "${TEST_TMP_ROOT}/bsd-sed.log"
+        run_install "${home_dir}" "${install_dir}" "${bin_dir}" gnu "${TEST_TMP_ROOT}/update-json.log"
 
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "path = \"${install_dir}/SrvSurvey/srvsurvey.sh\""
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "# path = \"/comment/location/srvsurvey.sh\""
-    assert_file_not_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "path = \"/old/location/srvsurvey.sh\""
-    pass "existing srvsurvey path updates with BSD sed behavior"
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"language": "en"'
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+        assert_file_not_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/old/location/srvsurvey.sh"'
+        pass "existing srvsurvey process path updates in settings.json"
 }
 
-test_autorun_entry_appends_to_existing_section() {
+test_process_entry_appends_to_existing_processes() {
     local setup
-    setup="$(prepare_env append)"
+        setup="$(prepare_env append-json)"
     local home_dir install_dir bin_dir
     IFS='|' read -r TEST_TMP_ROOT home_dir install_dir bin_dir <<< "${setup}"
 
     mkdir -p "${home_dir}/.config/min-ed-launcher"
-    cat > "${home_dir}/.config/min-ed-launcher/settings.toml" <<'EOF'
-[general]
-launcher = "min-ed-launcher"
-
-[autorun]
-enabled = true
+        cat > "${home_dir}/.config/min-ed-launcher/settings.json" <<'EOF'
+{
+    "gameStartDelay": 2,
+    "processes": [
+        {
+            "fileName": "/usr/bin/existing-helper",
+            "arguments": "--demo"
+        }
+    ]
+}
 EOF
 
     run_install "${home_dir}" "${install_dir}" "${bin_dir}" gnu "${TEST_TMP_ROOT}/append.log"
 
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "enabled = true"
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "[[autorun.entries]]"
-    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.toml" "path = \"${install_dir}/SrvSurvey/srvsurvey.sh\""
-    pass "autorun entry appends to existing section"
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"gameStartDelay": 2'
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/usr/bin/existing-helper"'
+        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+        pass "srvsurvey process entry appends to existing settings.json"
 }
 
 main() {
     test_fresh_install_creates_files
     TESTS_RUN=$((TESTS_RUN + 1))
-    test_existing_path_updates_with_bsd_sed
+        test_existing_process_path_updates_in_json
     TESTS_RUN=$((TESTS_RUN + 1))
-    test_autorun_entry_appends_to_existing_section
+        test_process_entry_appends_to_existing_processes
     TESTS_RUN=$((TESTS_RUN + 1))
     echo "1..${TESTS_RUN}"
 }

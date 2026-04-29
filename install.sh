@@ -7,8 +7,8 @@
 #   3. Download the latest SrvSurvey release and extract it.
 #   4. Download the latest ED Mini Launcher Linux binary.
 #   5. Place srvsurvey.sh next to SrvSurvey.exe.
-#   6. Create / update ~/.config/min-ed-launcher/settings.toml with the
-#      autorun entry for srvsurvey.sh.
+#   6. Create / update ~/.config/min-ed-launcher/settings.json with the
+#      processes entry for srvsurvey.sh.
 #   7. Print the one remaining manual step: setting the Steam launch option.
 #
 # Pass --update to check GitHub for newer releases and download them.
@@ -98,7 +98,7 @@ MINEDLAUNCHER_INSTALL_DIR="${INSTALL_DIR}/min-ed-launcher"
 heading "Checking dependencies"
 
 MISSING=()
-for cmd in curl unzip; do
+for cmd in curl unzip python3; do
     if command -v "${cmd}" &>/dev/null; then
         ok "${cmd}"
     else
@@ -110,9 +110,9 @@ done
 if [[ ${#MISSING[@]} -gt 0 ]]; then
     die "Missing required tools: ${MISSING[*]}
 Install them with your package manager, e.g.:
-  apt install curl unzip
-  dnf install curl unzip
-  pacman -S curl unzip"
+    apt install curl unzip python3
+    dnf install curl unzip python3
+    pacman -S curl unzip python3"
 fi
 
 # ---------------------------------------------------------------------------
@@ -446,64 +446,134 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Configure ED Mini Launcher settings.toml
+# 6. Configure ED Mini Launcher settings.json
 # ---------------------------------------------------------------------------
-heading "ED Mini Launcher configuration (settings.toml)"
+heading "ED Mini Launcher configuration (settings.json)"
 
 MEL_CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/min-ed-launcher"
-MEL_CONFIG="${MEL_CONFIG_DIR}/settings.toml"
+MEL_CONFIG="${MEL_CONFIG_DIR}/settings.json"
+MEL_LEGACY_CONFIG="${MEL_CONFIG_DIR}/settings.toml"
 mkdir -p "${MEL_CONFIG_DIR}"
 
-configure_toml() {
-    local entry_path_line="  path = \"${SRVSURVEY_SH_DEST}\""
+configure_mel_settings() {
+    local python_status
 
-    if [[ ! -f "${MEL_CONFIG}" ]]; then
-        # Create a minimal settings.toml with the autorun entry.
-        step "Creating ${MEL_CONFIG}…"
-        cat > "${MEL_CONFIG}" <<EOF
-# ED Mini Launcher configuration
-# See: https://github.com/rfvgyhn/min-ed-launcher#configuration
-
-[autorun]
-
-[[autorun.entries]]
-  path = "${SRVSURVEY_SH_DEST}"
-EOF
-        ok "Created ${MEL_CONFIG}"
-        return
+    if [[ -f "${MEL_LEGACY_CONFIG}" ]]; then
+        note "Legacy ${MEL_LEGACY_CONFIG} detected. min-ed-launcher uses settings.json; leaving the TOML file untouched."
     fi
 
-    # File already exists — check whether our exact path is already present.
-    if grep -qF "${SRVSURVEY_SH_DEST}" "${MEL_CONFIG}"; then
-        ok "settings.toml already contains the srvsurvey.sh entry. No changes needed."
-        return
-    fi
+    step "Ensuring ${MEL_CONFIG} launches srvsurvey.sh as an additional process…"
+    python_status="$({ python3 - "${MEL_CONFIG}" "${SRVSURVEY_SH_DEST}" <<'PY'
+import json
+import os
+import sys
 
-    # A srvsurvey.sh entry from a previous (different-path) install exists —
-    # update the path in-place.  The pattern targets only actual path = "…"
-    # assignment lines so that comment lines are never accidentally replaced.
-    if grep -q "srvsurvey\.sh" "${MEL_CONFIG}"; then
-        step "Updating existing srvsurvey.sh path in settings.toml…"
-        portable_sed_inplace \
-            "s|^[[:space:]]*path[[:space:]]*=.*srvsurvey\.sh.*|${entry_path_line}|" \
-            "${MEL_CONFIG}"
-        ok "Updated srvsurvey.sh path in ${MEL_CONFIG}"
-        return
-    fi
+config_path, script_path = sys.argv[1:3]
+created = not os.path.exists(config_path)
 
-    # Append the entry to an existing [autorun] section, or add one.
-    step "Adding srvsurvey.sh autorun entry to ${MEL_CONFIG}…"
-    if grep -q '^\[autorun\]' "${MEL_CONFIG}"; then
-        printf '\n[[autorun.entries]]\n  path = "%s"\n' "${SRVSURVEY_SH_DEST}" \
-            >> "${MEL_CONFIG}"
-    else
-        printf '\n[autorun]\n\n[[autorun.entries]]\n  path = "%s"\n' \
-            "${SRVSURVEY_SH_DEST}" >> "${MEL_CONFIG}"
-    fi
-    ok "Appended srvsurvey.sh autorun entry to ${MEL_CONFIG}"
+if created:
+    data = {}
+else:
+    try:
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError as exc:
+        print(f"invalid-json:{exc}")
+        sys.exit(2)
+
+if not isinstance(data, dict):
+    print("invalid-root")
+    sys.exit(3)
+
+processes = data.get('processes')
+if processes is None:
+    processes = []
+elif not isinstance(processes, list):
+    print("invalid-processes")
+    sys.exit(4)
+
+updated = False
+found = False
+for process in processes:
+    if isinstance(process, dict) and str(process.get('fileName', '')).endswith('srvsurvey.sh'):
+        found = True
+        if process.get('fileName') != script_path:
+            process['fileName'] = script_path
+            updated = True
+
+if not found:
+    processes.append({'fileName': script_path})
+    updated = True
+
+data['processes'] = processes
+
+with open(config_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+
+if created:
+    print('created')
+elif updated:
+    print('updated')
+else:
+    print('unchanged')
+PY
+        } 2>&1)"
+
+    case "${python_status}" in
+        created)
+            ok "Created ${MEL_CONFIG}"
+            ;;
+        updated)
+            ok "Updated srvsurvey.sh process entry in ${MEL_CONFIG}"
+            ;;
+        unchanged)
+            ok "settings.json already contains the srvsurvey.sh process entry. No changes needed."
+            ;;
+        invalid-json:*)
+            die "${MEL_CONFIG} is not valid JSON (${python_status#invalid-json:}). Fix or remove it, then run install.sh again."
+            ;;
+        invalid-root)
+            die "${MEL_CONFIG} must contain a JSON object at the top level. Fix or remove it, then run install.sh again."
+            ;;
+        invalid-processes)
+            die "${MEL_CONFIG} has a non-array 'processes' value. Fix or remove it, then run install.sh again."
+            ;;
+        *)
+            die "Failed to update ${MEL_CONFIG}: ${python_status}"
+            ;;
+    esac
 }
 
-configure_toml
+detect_terminal_prefix() {
+    if command -v ptyxis &>/dev/null; then
+        echo 'LD_LIBRARY_PATH="" ptyxis -- env LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
+    elif command -v konsole &>/dev/null; then
+        echo 'LD_LIBRARY_PATH="" konsole -e env LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
+    elif command -v gnome-terminal &>/dev/null; then
+        echo 'gnome-terminal --'
+    elif command -v alacritty &>/dev/null; then
+        echo 'alacritty -e'
+    elif command -v xterm &>/dev/null; then
+        echo 'xterm -e'
+    else
+        echo ''
+    fi
+}
+
+build_steam_launch_option() {
+    local terminal_prefix
+    terminal_prefix="$(detect_terminal_prefix)"
+
+    if [[ -n "${terminal_prefix}" ]]; then
+        echo "${terminal_prefix} \"${MEL_BIN}\" %command% /autorun /autoquit"
+    else
+        echo "\"${MEL_BIN}\" %command% /autorun /autoquit"
+    fi
+}
+
+configure_mel_settings
+STEAM_LAUNCH_OPTION="$(build_steam_launch_option)"
 
 # ---------------------------------------------------------------------------
 # 7. Summary and remaining manual step
@@ -513,7 +583,7 @@ heading "Installation complete"
 ok "SrvSurvey ${SRVSURVEY_TAG}        → ${SRVSURVEY_INSTALL_DIR}"
 ok "ED Mini Launcher ${MEL_TAG}  → ${MEL_BIN}"
 ok "srvsurvey.sh                      → ${SRVSURVEY_SH_DEST}"
-ok "settings.toml                     → ${MEL_CONFIG}"
+ok "settings.json                     → ${MEL_CONFIG}"
 if [[ -n "${ELITE_STEAMAPPS}" ]]; then
     ok "Elite Dangerous                  → ${ELITE_STEAMAPPS}/common/Elite Dangerous"
 fi
@@ -524,11 +594,18 @@ echo ""
 echo "  In Steam, right-click Elite Dangerous → Properties → General."
 echo "  Set 'Launch Options' to:"
 echo ""
-echo -e "    ${CYAN}${MEL_BIN} %command%${NC}"
+echo -e "    ${CYAN}${STEAM_LAUNCH_OPTION}${NC}"
 echo ""
 echo "  Then launch Elite Dangerous through Steam as normal."
 echo "  ED Mini Launcher will start SrvSurvey automatically alongside the game."
 echo ""
+
+if [[ "${STEAM_LAUNCH_OPTION}" == "\"${MEL_BIN}\" %command% /autorun /autoquit" ]]; then
+    echo -e "${YELLOW}  Note:${NC} No supported terminal emulator was detected."
+    echo "  If Steam still fails to launch the game silently, install or select a terminal"
+    echo "  such as Ptyxis, Konsole, Gnome Terminal, Alacritty, or Xterm and rerun install.sh."
+    echo ""
+fi
 
 if [[ -n "${ELITE_STEAMAPPS}" \
       && ! -d "${ELITE_STEAMAPPS}/compatdata/${ELITE_APP_ID}/pfx" ]]; then
