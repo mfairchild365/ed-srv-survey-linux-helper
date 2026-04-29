@@ -36,7 +36,7 @@ NC='\033[0m'
 
 info()    { echo -e "${GREEN}[install]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[install]${NC} $*" >&2; }
-error()   { echo -e "${RED}[install]${NC} ERROR: $*" >&2; }
+error()   { echo -e "${RED}[install]${NC} ERROR: $*"; }
 heading() { echo -e "\n${BOLD}${CYAN}══ $* ══${NC}"; }
 step()    { echo -e "  ${CYAN}▶${NC} $*"; }
 ok()      { echo -e "  ${GREEN}✔${NC} $*"; }
@@ -241,15 +241,10 @@ else
 
 step "Fetching latest release information from GitHub…"
 SRVSURVEY_TAG="$(get_latest_release_tag "${SRVSURVEY_REPO}")"
-SRVSURVEY_URL="$(get_latest_release_url "${SRVSURVEY_REPO}" "SrvSurvey\.zip")"
 
 if [[ -z "${SRVSURVEY_TAG}" ]]; then
     die "Could not retrieve the latest SrvSurvey release tag.
 Check your internet connection or visit https://github.com/${SRVSURVEY_REPO}/releases"
-fi
-if [[ -z "${SRVSURVEY_URL}" ]]; then
-    die "Could not find SrvSurvey.zip in the latest release (${SRVSURVEY_TAG}).
-Check https://github.com/${SRVSURVEY_REPO}/releases manually."
 fi
 
 ok "Latest SrvSurvey release: ${SRVSURVEY_TAG}"
@@ -259,6 +254,12 @@ if [[ "${INSTALLED_SRVSURVEY_TAG}" == "${SRVSURVEY_TAG}" \
       && -f "${SRVSURVEY_INSTALL_DIR}/SrvSurvey.exe" ]]; then
     ok "SrvSurvey ${SRVSURVEY_TAG} is already up to date. Skipping download."
 else
+    SRVSURVEY_URL="$(get_latest_release_url "${SRVSURVEY_REPO}" "SrvSurvey\.zip")"
+    if [[ -z "${SRVSURVEY_URL}" ]]; then
+        die "Could not find SrvSurvey.zip in the latest release (${SRVSURVEY_TAG}).
+Check https://github.com/${SRVSURVEY_REPO}/releases manually."
+    fi
+
     if [[ -n "${INSTALLED_SRVSURVEY_TAG}" ]]; then
         step "Updating SrvSurvey from ${INSTALLED_SRVSURVEY_TAG} → ${SRVSURVEY_TAG}…"
     else
@@ -324,21 +325,21 @@ if [[ -z "${MEL_TAG}" ]]; then
 Check your internet connection or visit https://github.com/${MINEDLAUNCHER_REPO}/releases"
 fi
 
-# Try arch-specific asset first (e.g. linux-x64), then plain "linux".
-MEL_URL="$(get_latest_release_url "${MINEDLAUNCHER_REPO}" "linux-${MEL_ARCH}")"
-if [[ -z "${MEL_URL}" ]]; then
-    MEL_URL="$(get_latest_release_url "${MINEDLAUNCHER_REPO}" "linux")"
-fi
-if [[ -z "${MEL_URL}" ]]; then
-    die "Could not find a Linux release asset for ED Mini Launcher (${MEL_TAG}).
-Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
-fi
-
 ok "Latest ED Mini Launcher release: ${MEL_TAG}"
 
 if [[ "${INSTALLED_MEL_TAG}" == "${MEL_TAG}" && -x "${MEL_BIN}" ]]; then
     ok "ED Mini Launcher ${MEL_TAG} is already up to date. Skipping download."
 else
+    # Try arch-specific asset first (e.g. linux-x64), then plain "linux".
+    MEL_URL="$(get_latest_release_url "${MINEDLAUNCHER_REPO}" "linux-${MEL_ARCH}")"
+    if [[ -z "${MEL_URL}" ]]; then
+        MEL_URL="$(get_latest_release_url "${MINEDLAUNCHER_REPO}" "linux")"
+    fi
+    if [[ -z "${MEL_URL}" ]]; then
+        die "Could not find a Linux release asset for ED Mini Launcher (${MEL_TAG}).
+Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
+    fi
+
     if [[ -n "${INSTALLED_MEL_TAG}" ]]; then
         step "Updating ED Mini Launcher from ${INSTALLED_MEL_TAG} → ${MEL_TAG}…"
     else
