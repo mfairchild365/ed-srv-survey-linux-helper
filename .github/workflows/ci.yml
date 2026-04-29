@@ -30,7 +30,7 @@ jobs:
         run: brew install shellcheck
 
       - name: Run shellcheck
-        run: shellcheck install.sh srvsurvey.sh tests/*.sh
+        run: shellcheck collect-logs.sh install.sh srvsurvey.sh tests/*.sh
 
       - name: Run install tests
         run: bash tests/test_install.sh

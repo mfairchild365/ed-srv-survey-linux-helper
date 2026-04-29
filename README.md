@@ -89,6 +89,24 @@ The test harnesses mock network downloads, extraction, Wine binaries, Proton pat
 
 Continuous integration runs `shellcheck` plus both test suites on GitHub Actions for Ubuntu and macOS.
 
+## Collecting Logs
+
+To gather the most relevant troubleshooting details into one report, run:
+
+```bash
+bash collect-logs.sh --output /tmp/ed-srv-survey-report.txt
+```
+
+The helper collects:
+
+- `~/.config/min-ed-launcher/settings.json` (and legacy `settings.toml` if present)
+- `~/.local/state/min-ed-launcher/min-ed-launcher.log`
+- `~/.local/state/ed-srv-survey-helper/srvsurvey.log`
+- fallback helper logs under `${TMPDIR:-/tmp}`
+- installed helper file paths and key environment variables (`LD_PRELOAD`, `LD_LIBRARY_PATH`, `STEAM_COMPAT_DATA_PATH`, `WINEPREFIX`, etc.)
+
+Use `--install-dir /custom/path` if you installed outside the default location.
+
 ### One manual step
 
 After running the installer, open Steam, right-click **Elite Dangerous → Properties → General**, and set the **Launch Options** to the command printed by the installer, for example:
@@ -263,9 +281,11 @@ SrvSurvey automatically detects that it is running under Wine/Linux by checking 
 ### SrvSurvey doesn't open at all
 
 - Check the helper log at `~/.local/state/ed-srv-survey-helper/srvsurvey.log`.
+- If `HOME` or `XDG_STATE_HOME` is unavailable in the Steam-launched environment, the helper falls back to `${TMPDIR:-/tmp}/ed-srv-survey-helper/srvsurvey.log`.
 - Check `min-ed-launcher`'s log at `~/.local/state/min-ed-launcher/min-ed-launcher.log`.
 - On Bazzite/KDE/Ptyxis/Konsole, prefer the launch option variants above that reset Steam's runtime `LD_LIBRARY_PATH` and pass `MEL_LD_LIBRARY_PATH` into the terminal session.
 - If you see `libextest.so` wrong-ELF-class warnings, rerun `./install.sh` so it prints the updated launch command and rewrites the helper process entry with `keepOpen: true`.
+- `srvsurvey.sh` now exports `WINEPREFIX` from `STEAM_COMPAT_DATA_PATH/pfx` when available so SrvSurvey launches against Elite's Proton prefix instead of a default Wine prefix.
 
 ### Elite doesn't launch / crashes on startup
 

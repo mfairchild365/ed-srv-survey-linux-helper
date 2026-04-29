@@ -22,15 +22,34 @@
 
 set -euo pipefail
 
-LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/ed-srv-survey-helper"
-LOG_FILE="${LOG_DIR}/srvsurvey.log"
-mkdir -p "${LOG_DIR}"
+STATE_BASE="${XDG_STATE_HOME:-}"
+if [[ -z "${STATE_BASE}" ]]; then
+    if [[ -n "${HOME:-}" ]]; then
+        STATE_BASE="${HOME}/.local/state"
+    else
+        STATE_BASE="${TMPDIR:-/tmp}"
+    fi
+fi
 
-log() {
-    echo "[srvsurvey.sh] $*"
+LOG_DIR="${STATE_BASE%/}/ed-srv-survey-helper"
+LOG_FILE="${LOG_DIR}/srvsurvey.log"
+
+ensure_log_dir() {
+    mkdir -p "${LOG_DIR}" 2>/dev/null || {
+        LOG_DIR="${TMPDIR:-/tmp}"
+        LOG_FILE="${LOG_DIR%/}/ed-srv-survey-helper.log"
+    }
 }
 
-exec > >(tee -a "${LOG_FILE}") 2>&1
+log() {
+    local message="[srvsurvey.sh] $*"
+    echo "${message}" >&2
+    printf '%s\n' "${message}" >> "${LOG_FILE}" 2>/dev/null || true
+}
+
+ensure_log_dir
+
+trap 'status=$?; if [[ ${status} -ne 0 ]]; then log "Exiting with status ${status}"; fi' EXIT
 
 sanitize_runtime_env() {
     if [[ -n "${LD_PRELOAD:-}" ]]; then
@@ -150,6 +169,20 @@ find_wine() {
 
     echo ""
 }
+
+configure_proton_prefix() {
+    if [[ -n "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
+        local compat_prefix="${STEAM_COMPAT_DATA_PATH%/}/pfx"
+        if [[ -d "${compat_prefix}" ]]; then
+            export WINEPREFIX="${compat_prefix}"
+            log "Using Proton prefix: ${WINEPREFIX}"
+        else
+            log "Proton prefix path not found at ${compat_prefix}"
+        fi
+    fi
+}
+
+configure_proton_prefix
 
 WINE="$(find_wine)"
 

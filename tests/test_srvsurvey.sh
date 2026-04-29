@@ -69,6 +69,7 @@ set -euo pipefail
     printf 'argv0=%s\n' "$0"
     printf 'env_LD_PRELOAD=%s\n' "${LD_PRELOAD-__unset__}"
     printf 'env_LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH-__unset__}"
+    printf 'env_WINEPREFIX=%s\n' "${WINEPREFIX-__unset__}"
     for arg in "$@"; do
         printf 'arg=%s\n' "$arg"
     done
@@ -88,8 +89,9 @@ prepare_env() {
     local bin_dir="${test_tmp_root}/${test_name}/bin"
     local steamapps_dir="${test_tmp_root}/${test_name}/Steam/steamapps"
     local compat_dir="${steamapps_dir}/compatdata/359320"
+    local prefix_dir="${compat_dir}/pfx"
 
-    mkdir -p "${launcher_dir}" "${srv_dir}" "${bin_dir}" "${compat_dir}"
+    mkdir -p "${launcher_dir}" "${srv_dir}" "${bin_dir}" "${prefix_dir}"
     cp "${REPO_ROOT}/srvsurvey.sh" "${launcher_dir}/srvsurvey.sh"
     printf 'fake exe\n' > "${srv_dir}/SrvSurvey.exe"
 
@@ -157,6 +159,7 @@ test_uses_steam_compat_proton_wine() {
 
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
     assert_wine_arg_present "${wine_log}" "-linux"
+    assert_wine_log_contains "${wine_log}" "env_WINEPREFIX=${compat_dir}/pfx"
     assert_output_contains "${output_file}" "Using Wine binary: ${proton_wine}"
     pass "uses Proton wine derived from STEAM_COMPAT_DATA_PATH"
 }
@@ -219,6 +222,32 @@ test_sanitizes_steam_runtime_environment() {
     pass "sanitizes Steam runtime environment before launching Wine"
 }
 
+test_uses_tmp_log_when_home_missing() {
+    local setup
+    setup="$(prepare_env tmp-log)"
+    local launcher_dir srv_dir bin_dir steamapps_dir compat_dir
+    IFS='|' read -r TEST_TMP_ROOT launcher_dir srv_dir bin_dir steamapps_dir compat_dir <<< "${setup}"
+
+    local wine_log="${TEST_TMP_ROOT}/wine.log"
+    local output_file="${TEST_TMP_ROOT}/stdout.log"
+    local tmp_base="${TEST_TMP_ROOT}/tmp"
+    local fallback_log="${tmp_base}/ed-srv-survey-helper/srvsurvey.log"
+
+    mkdir -p "${tmp_base}"
+    write_wine_stub "${bin_dir}/wine64"
+
+    env -u HOME -u XDG_STATE_HOME \
+        TMPDIR="${tmp_base}" \
+        PATH="${bin_dir}:${PATH}" \
+        SRV_TEST_WINE_LOG="${wine_log}" \
+        SRVSURVEY_DELAY=0 \
+        bash "${launcher_dir}/srvsurvey.sh" > "${output_file}" 2>&1
+
+    assert_file_exists "${fallback_log}"
+    assert_file_contains "${fallback_log}" "Logging to ${fallback_log}"
+    pass "writes helper log to TMPDIR when HOME is unavailable"
+}
+
 test_errors_when_srvsurvey_dir_missing() {
     local setup
     setup="$(prepare_env missing-dir)"
@@ -263,6 +292,8 @@ main() {
     test_falls_back_to_system_wine64_and_honors_delay
     TESTS_RUN=$((TESTS_RUN + 1))
     test_sanitizes_steam_runtime_environment
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_uses_tmp_log_when_home_missing
     TESTS_RUN=$((TESTS_RUN + 1))
     test_errors_when_srvsurvey_dir_missing
     TESTS_RUN=$((TESTS_RUN + 1))
