@@ -510,4 +510,11 @@ fi
 
 # Keep the terminal open when launched from a file browser so the user can
 # read the Steam launch option instructions above before the window closes.
-read -rp "Press Enter to close..." _
+# Read from /dev/tty directly so this works even when stdin is redirected
+# (e.g. when a desktop file manager invokes the script without a proper TTY
+# on stdin).  Fall back gracefully if no terminal device is available.
+if [[ -e /dev/tty ]]; then
+    read -rp "Press Enter to close..." _ < /dev/tty || true
+else
+    echo "(Close this window when you are done reading.)"
+fi
