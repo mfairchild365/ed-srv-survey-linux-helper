@@ -102,16 +102,19 @@ run_srvsurvey() {
     local output_file="$3"
     local wine_log="$4"
     local explicit_dir="${5:-}"
+    shift 5 || true
 
-    (
-        export PATH="${bin_dir}:${PATH}"
-        export SRV_TEST_WINE_LOG="${wine_log}"
-        if [[ -n "${explicit_dir}" ]]; then
-            bash "${launcher_dir}/srvsurvey.sh" "${explicit_dir}"
-        else
-            bash "${launcher_dir}/srvsurvey.sh"
-        fi
-    ) > "${output_file}" 2>&1
+    if [[ -n "${explicit_dir}" ]]; then
+        env PATH="${bin_dir}:${PATH}" \
+            SRV_TEST_WINE_LOG="${wine_log}" \
+            "$@" \
+            bash "${launcher_dir}/srvsurvey.sh" "${explicit_dir}" > "${output_file}" 2>&1
+    else
+        env PATH="${bin_dir}:${PATH}" \
+            SRV_TEST_WINE_LOG="${wine_log}" \
+            "$@" \
+            bash "${launcher_dir}/srvsurvey.sh" > "${output_file}" 2>&1
+    fi
 }
 
 test_prefers_wineloader_and_default_dir() {
@@ -125,13 +128,9 @@ test_prefers_wineloader_and_default_dir() {
     local wineloader="${TEST_TMP_ROOT}/custom-wine64"
     write_wine_stub "${wineloader}"
 
-    (
-        export PATH="${bin_dir}:${PATH}"
-        export SRV_TEST_WINE_LOG="${wine_log}"
-        export WINELOADER="${wineloader}"
-        export SRVSURVEY_DELAY=0
-        bash "${launcher_dir}/srvsurvey.sh"
-    ) > "${output_file}" 2>&1
+    run_srvsurvey "${launcher_dir}" "${bin_dir}" "${output_file}" "${wine_log}" "" \
+        WINELOADER="${wineloader}" \
+        SRVSURVEY_DELAY=0
 
     assert_file_exists "${wine_log}"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
@@ -152,13 +151,9 @@ test_uses_steam_compat_proton_wine() {
     mkdir -p "$(dirname "${proton_wine}")"
     write_wine_stub "${proton_wine}"
 
-    (
-        export PATH="${bin_dir}:${PATH}"
-        export SRV_TEST_WINE_LOG="${wine_log}"
-        export SRVSURVEY_DELAY=0
-        export STEAM_COMPAT_DATA_PATH="${compat_dir}"
-        bash "${launcher_dir}/srvsurvey.sh"
-    ) > "${output_file}" 2>&1
+    run_srvsurvey "${launcher_dir}" "${bin_dir}" "${output_file}" "${wine_log}" "" \
+        SRVSURVEY_DELAY=0 \
+        STEAM_COMPAT_DATA_PATH="${compat_dir}"
 
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
     assert_wine_arg_present "${wine_log}" "-linux"
@@ -185,13 +180,9 @@ exit 0
 EOF
     chmod +x "${bin_dir}/sleep"
 
-    (
-        export PATH="${bin_dir}:${PATH}"
-        export SRV_TEST_WINE_LOG="${wine_log}"
-        export SRV_TEST_SLEEP_LOG="${sleep_log}"
-        export SRVSURVEY_DELAY=7
-        bash "${launcher_dir}/srvsurvey.sh"
-    ) > "${output_file}" 2>&1
+    run_srvsurvey "${launcher_dir}" "${bin_dir}" "${output_file}" "${wine_log}" "" \
+        SRV_TEST_SLEEP_LOG="${sleep_log}" \
+        SRVSURVEY_DELAY=7
 
     assert_file_contains "${sleep_log}" "7"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
@@ -213,16 +204,12 @@ test_sanitizes_steam_runtime_environment() {
     mkdir -p "${TEST_TMP_ROOT}/home"
     write_wine_stub "${bin_dir}/wine64"
 
-    (
-        export HOME="${TEST_TMP_ROOT}/home"
-        export PATH="${bin_dir}:${PATH}"
-        export SRV_TEST_WINE_LOG="${wine_log}"
-        export SRVSURVEY_DELAY=0
-        export LD_PRELOAD="/usr/lib/extest/libextest.so"
-        export LD_LIBRARY_PATH="/steam/runtime/lib"
-        export MEL_LD_LIBRARY_PATH="/host/runtime/lib"
-        bash "${launcher_dir}/srvsurvey.sh"
-    ) > "${output_file}" 2>&1
+    run_srvsurvey "${launcher_dir}" "${bin_dir}" "${output_file}" "${wine_log}" "" \
+        HOME="${TEST_TMP_ROOT}/home" \
+        SRVSURVEY_DELAY=0 \
+        LD_PRELOAD="/usr/lib/extest/libextest.so" \
+        LD_LIBRARY_PATH="/steam/runtime/lib" \
+        MEL_LD_LIBRARY_PATH="/host/runtime/lib"
 
     assert_file_exists "${log_file}"
     assert_output_contains "${output_file}" "Clearing LD_PRELOAD for helper launch"
@@ -241,7 +228,7 @@ test_errors_when_srvsurvey_dir_missing() {
     rm -rf "${srv_dir}"
     local output_file="${TEST_TMP_ROOT}/stderr.log"
 
-    if (export PATH="${bin_dir}:${PATH}"; bash "${launcher_dir}/srvsurvey.sh") > "${output_file}" 2>&1; then
+    if env PATH="${bin_dir}:${PATH}" bash "${launcher_dir}/srvsurvey.sh" > "${output_file}" 2>&1; then
         fail "expected srvsurvey.sh to fail when SrvSurvey directory is missing"
     fi
 
@@ -257,12 +244,10 @@ test_errors_when_no_wine_binary_found() {
 
     local output_file="${TEST_TMP_ROOT}/stderr.log"
 
-    if (
-        export PATH="${bin_dir}:${PATH}"
-        export SRVSURVEY_DELAY=0
-        export WINELOADER=""
-        bash "${launcher_dir}/srvsurvey.sh"
-    ) > "${output_file}" 2>&1; then
+    if env PATH="${bin_dir}:${PATH}" \
+        SRVSURVEY_DELAY=0 \
+        WINELOADER="" \
+        bash "${launcher_dir}/srvsurvey.sh" > "${output_file}" 2>&1; then
         fail "expected srvsurvey.sh to fail when no Wine binary is available"
     fi
 

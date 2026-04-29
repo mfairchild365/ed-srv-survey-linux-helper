@@ -550,8 +550,10 @@ PY
 
 detect_terminal_prefix() {
     if command -v ptyxis &>/dev/null; then
+        # shellcheck disable=SC2016
         echo 'LD_LIBRARY_PATH="" ptyxis -- env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
     elif command -v konsole &>/dev/null; then
+        # shellcheck disable=SC2016
         echo 'LD_LIBRARY_PATH="" konsole -e env MEL_LD_LIBRARY_PATH="$LD_LIBRARY_PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
     elif command -v gnome-terminal &>/dev/null; then
         echo 'gnome-terminal --'
