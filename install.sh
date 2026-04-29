@@ -11,13 +11,14 @@
 #      autorun entry for srvsurvey.sh.
 #   7. Print the one remaining manual step: setting the Steam launch option.
 #
-# Run again at any time to update SrvSurvey and ED Mini Launcher to their
-# latest releases.  Already-current versions are skipped automatically.
+# Pass --update to check GitHub for newer releases and download them.
+# Without --update, already-installed components are left as-is.
 #
 # Usage:
-#   ./install.sh [--install-dir DIR]
+#   ./install.sh [--update] [--install-dir DIR]
 #
 # Options:
+#   --update            Check GitHub for newer releases and update if available.
 #   --install-dir DIR   Where to install SrvSurvey and ED Mini Launcher.
 #                       Defaults to ~/.local/share/ed-srv-survey-helper
 
@@ -55,9 +56,14 @@ DEFAULT_INSTALL_DIR="${HOME}/.local/share/ed-srv-survey-helper"
 # Parse arguments
 # ---------------------------------------------------------------------------
 INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
+DO_UPDATE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --update)
+            DO_UPDATE=true
+            shift
+            ;;
         --install-dir)
             INSTALL_DIR="${2:?--install-dir requires a path}"
             shift 2
@@ -67,12 +73,13 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [--install-dir DIR]"
+            echo "Usage: $0 [--update] [--install-dir DIR]"
             echo ""
-            echo "Install or update SrvSurvey and ED Mini Launcher."
-            echo "Run again at any time to pull the latest releases."
+            echo "Install SrvSurvey and ED Mini Launcher."
+            echo "Pass --update to check GitHub for newer releases and download them."
             echo ""
             echo "Options:"
+            echo "  --update            Check GitHub for newer releases and update if available."
             echo "  --install-dir DIR   Where to install (default: ${DEFAULT_INSTALL_DIR})"
             exit 0
             ;;
@@ -219,6 +226,19 @@ get_latest_release_tag() {
 # ---------------------------------------------------------------------------
 heading "SrvSurvey"
 
+SRVSURVEY_VERSION_FILE="${SRVSURVEY_INSTALL_DIR}/.installed-version"
+INSTALLED_SRVSURVEY_TAG=""
+if [[ -f "${SRVSURVEY_VERSION_FILE}" ]]; then
+    INSTALLED_SRVSURVEY_TAG="$(<"${SRVSURVEY_VERSION_FILE}")"
+fi
+
+if [[ -n "${INSTALLED_SRVSURVEY_TAG}" \
+      && -f "${SRVSURVEY_INSTALL_DIR}/SrvSurvey.exe" \
+      && "${DO_UPDATE}" == "false" ]]; then
+    ok "SrvSurvey ${INSTALLED_SRVSURVEY_TAG} is already installed. Pass --update to check for a newer version."
+    SRVSURVEY_TAG="${INSTALLED_SRVSURVEY_TAG}"
+else
+
 step "Fetching latest release information from GitHub…"
 SRVSURVEY_TAG="$(get_latest_release_tag "${SRVSURVEY_REPO}")"
 SRVSURVEY_URL="$(get_latest_release_url "${SRVSURVEY_REPO}" "SrvSurvey\.zip")"
@@ -235,12 +255,6 @@ fi
 ok "Latest SrvSurvey release: ${SRVSURVEY_TAG}"
 
 # Check whether the installed version is already current.
-SRVSURVEY_VERSION_FILE="${SRVSURVEY_INSTALL_DIR}/.installed-version"
-INSTALLED_SRVSURVEY_TAG=""
-if [[ -f "${SRVSURVEY_VERSION_FILE}" ]]; then
-    INSTALLED_SRVSURVEY_TAG="$(<"${SRVSURVEY_VERSION_FILE}")"
-fi
-
 if [[ "${INSTALLED_SRVSURVEY_TAG}" == "${SRVSURVEY_TAG}" \
       && -f "${SRVSURVEY_INSTALL_DIR}/SrvSurvey.exe" ]]; then
     ok "SrvSurvey ${SRVSURVEY_TAG} is already up to date. Skipping download."
@@ -268,6 +282,8 @@ else
     ok "SrvSurvey ${SRVSURVEY_TAG} installed to ${SRVSURVEY_INSTALL_DIR}"
 fi
 
+fi  # end DO_UPDATE / already-installed check
+
 if [[ ! -f "${SRVSURVEY_INSTALL_DIR}/SrvSurvey.exe" ]]; then
     die "SrvSurvey.exe not found after extraction in ${SRVSURVEY_INSTALL_DIR}.
 The zip layout may have changed — check https://github.com/${SRVSURVEY_REPO}/releases"
@@ -278,8 +294,6 @@ fi
 # ---------------------------------------------------------------------------
 heading "ED Mini Launcher"
 
-step "Fetching latest release information from GitHub…"
-
 # Detect host architecture for selecting the correct release asset.
 ARCH="$(uname -m)"
 case "${ARCH}" in
@@ -287,6 +301,22 @@ case "${ARCH}" in
     aarch64) MEL_ARCH="arm64" ;;
     *)       warn "Unknown architecture '${ARCH}'; will try 'x64'."; MEL_ARCH="x64" ;;
 esac
+
+MEL_BIN="${MINEDLAUNCHER_INSTALL_DIR}/min-ed-launcher"
+MEL_VERSION_FILE="${MINEDLAUNCHER_INSTALL_DIR}/.installed-version"
+INSTALLED_MEL_TAG=""
+if [[ -f "${MEL_VERSION_FILE}" ]]; then
+    INSTALLED_MEL_TAG="$(<"${MEL_VERSION_FILE}")"
+fi
+
+if [[ -n "${INSTALLED_MEL_TAG}" \
+      && -x "${MEL_BIN}" \
+      && "${DO_UPDATE}" == "false" ]]; then
+    ok "ED Mini Launcher ${INSTALLED_MEL_TAG} is already installed. Pass --update to check for a newer version."
+    MEL_TAG="${INSTALLED_MEL_TAG}"
+else
+
+step "Fetching latest release information from GitHub…"
 
 MEL_TAG="$(get_latest_release_tag "${MINEDLAUNCHER_REPO}")"
 if [[ -z "${MEL_TAG}" ]]; then
@@ -305,13 +335,6 @@ Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
 fi
 
 ok "Latest ED Mini Launcher release: ${MEL_TAG}"
-
-MEL_BIN="${MINEDLAUNCHER_INSTALL_DIR}/min-ed-launcher"
-MEL_VERSION_FILE="${MINEDLAUNCHER_INSTALL_DIR}/.installed-version"
-INSTALLED_MEL_TAG=""
-if [[ -f "${MEL_VERSION_FILE}" ]]; then
-    INSTALLED_MEL_TAG="$(<"${MEL_VERSION_FILE}")"
-fi
 
 if [[ "${INSTALLED_MEL_TAG}" == "${MEL_TAG}" && -x "${MEL_BIN}" ]]; then
     ok "ED Mini Launcher ${MEL_TAG} is already up to date. Skipping download."
@@ -364,6 +387,8 @@ else
 
     ok "ED Mini Launcher ${MEL_TAG} installed to ${MEL_BIN}"
 fi
+
+fi  # end DO_UPDATE / already-installed check
 
 if [[ ! -x "${MEL_BIN}" ]]; then
     die "ED Mini Launcher binary not found / not executable at ${MEL_BIN}."
@@ -482,3 +507,7 @@ if [[ -n "${ELITE_STEAMAPPS}" \
     echo "  Steam → Elite Dangerous → Properties → Compatibility → Proton Experimental."
     echo ""
 fi
+
+# Keep the terminal open when launched from a file browser so the user can
+# read the Steam launch option instructions above before the window closes.
+read -rp "Press Enter to close..." _
