@@ -209,7 +209,8 @@ get_latest_release_url() {
         | grep '"browser_download_url"' \
         | grep -i "${pattern}" \
         | head -1 \
-        | sed 's/.*"browser_download_url": "\([^"]*\)".*/\1/'
+        | sed 's/.*"browser_download_url": "\([^"]*\)".*/\1/' \
+        || true
 }
 
 # Print the tag_name of the latest release of REPO.
@@ -254,7 +255,7 @@ if [[ "${INSTALLED_SRVSURVEY_TAG}" == "${SRVSURVEY_TAG}" \
       && -f "${SRVSURVEY_INSTALL_DIR}/SrvSurvey.exe" ]]; then
     ok "SrvSurvey ${SRVSURVEY_TAG} is already up to date. Skipping download."
 else
-    SRVSURVEY_URL="$(get_latest_release_url "${SRVSURVEY_REPO}" "SrvSurvey\.zip")"
+    SRVSURVEY_URL="$(get_latest_release_url "${SRVSURVEY_REPO}" "SrvSurvey.*\.zip")"
     if [[ -z "${SRVSURVEY_URL}" ]]; then
         die "Could not find SrvSurvey.zip in the latest release (${SRVSURVEY_TAG}).
 Check https://github.com/${SRVSURVEY_REPO}/releases manually."
