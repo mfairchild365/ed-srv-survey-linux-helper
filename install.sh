@@ -401,20 +401,28 @@ heading "srvsurvey.sh launcher script"
 
 SRVSURVEY_SH_DEST="${SRVSURVEY_INSTALL_DIR}/srvsurvey.sh"
 
-# Prefer the copy shipped alongside this install.sh (same repo).
-# Fall back to downloading from GitHub if install.sh was run standalone.
-if [[ -f "${SCRIPT_DIR}/srvsurvey.sh" ]]; then
-    step "Copying srvsurvey.sh from ${SCRIPT_DIR}…"
-    cp "${SCRIPT_DIR}/srvsurvey.sh" "${SRVSURVEY_SH_DEST}"
+if [[ -f "${SRVSURVEY_SH_DEST}" && "${DO_UPDATE}" == "false" ]]; then
+    ok "srvsurvey.sh is already installed. Pass --update to refresh it."
 else
-    step "srvsurvey.sh not found alongside install.sh — downloading from GitHub…"
-    curl -fsSL \
-        "https://raw.githubusercontent.com/mfairchild365/ed-srv-survey-linux-helper/main/srvsurvey.sh" \
-        -o "${SRVSURVEY_SH_DEST}"
-fi
+    # Prefer the copy shipped alongside this install.sh (same repo).
+    # Fall back to downloading from GitHub if install.sh was run standalone.
+    if [[ -f "${SCRIPT_DIR}/srvsurvey.sh" ]]; then
+        step "Copying srvsurvey.sh from ${SCRIPT_DIR}…"
+        # Guard: skip cp if source and destination are the same file
+        # (e.g. install.sh was placed inside SRVSURVEY_INSTALL_DIR).
+        if [[ ! "${SCRIPT_DIR}/srvsurvey.sh" -ef "${SRVSURVEY_SH_DEST}" ]]; then
+            cp "${SCRIPT_DIR}/srvsurvey.sh" "${SRVSURVEY_SH_DEST}"
+        fi
+    else
+        step "srvsurvey.sh not found alongside install.sh — downloading from GitHub…"
+        curl -fsSL \
+            "https://raw.githubusercontent.com/mfairchild365/ed-srv-survey-linux-helper/main/srvsurvey.sh" \
+            -o "${SRVSURVEY_SH_DEST}"
+    fi
 
-chmod +x "${SRVSURVEY_SH_DEST}"
-ok "srvsurvey.sh installed at ${SRVSURVEY_SH_DEST}"
+    chmod +x "${SRVSURVEY_SH_DEST}"
+    ok "srvsurvey.sh installed at ${SRVSURVEY_SH_DEST}"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Configure ED Mini Launcher settings.toml
