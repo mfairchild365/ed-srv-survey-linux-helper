@@ -105,7 +105,7 @@ find_wine() {
         done
 
         # Generic search: pick the first Proton directory we find
-        PROTON_WINE=$(find "${STEAMAPPS_DIR}/common" -maxdepth 3 \
+        PROTON_WINE=$(find "${STEAMAPPS_DIR}/common" -maxdepth 4 \
             -path "*/Proton*/files/bin/wine64" -type f 2>/dev/null | head -1)
         if [[ -n "${PROTON_WINE}" && -x "${PROTON_WINE}" ]]; then
             echo "${PROTON_WINE}"

@@ -200,6 +200,17 @@ github_curl() {
     fi
 }
 
+portable_sed_inplace() {
+    local expression="$1"
+    local file_path="$2"
+
+    if sed --version >/dev/null 2>&1; then
+        sed -i "$expression" "$file_path"
+    else
+        sed -i '' "$expression" "$file_path"
+    fi
+}
+
 # Print the browser_download_url of the first release asset whose filename
 # matches PATTERN (case-insensitive) from the latest release of REPO.
 get_latest_release_url() {
@@ -360,7 +371,9 @@ Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
         if [[ ! -f "${MEL_BIN}" ]]; then
             local found
             found="$(find "${MINEDLAUNCHER_INSTALL_DIR}" -type f \
-                        -name "min-ed-launcher" ! -name "*.version" | head -1)"
+                        \( -name "min-ed-launcher" -o -name "min-ed-launcher_*" -o -name "min-ed-launcher-*" -o -name "MinEdLauncher" \) \
+                        ! -name "*.version" ! -name "*.tar.gz" ! -name "*.tgz" ! -name "*.zip" \
+                        | head -1)"
             if [[ -n "${found}" && "${found}" != "${MEL_BIN}" ]]; then
                 mv "${found}" "${MEL_BIN}"
             fi
@@ -380,6 +393,12 @@ Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
         # Raw binary (no archive)
         step "Installing binary…"
         cp "${TMPASSET}" "${MEL_BIN}"
+    fi
+
+    if [[ ! -f "${MEL_BIN}" ]]; then
+        die "Downloaded ED Mini Launcher asset did not contain an installable binary.
+Asset URL: ${MEL_URL}
+Check https://github.com/${MINEDLAUNCHER_REPO}/releases manually."
     fi
 
     chmod +x "${MEL_BIN}"
@@ -465,7 +484,8 @@ EOF
     # assignment lines so that comment lines are never accidentally replaced.
     if grep -q "srvsurvey\.sh" "${MEL_CONFIG}"; then
         step "Updating existing srvsurvey.sh path in settings.toml…"
-        sed -i "s|^[[:space:]]*path[[:space:]]*=.*srvsurvey\.sh.*|${entry_path_line}|" \
+        portable_sed_inplace \
+            "s|^[[:space:]]*path[[:space:]]*=.*srvsurvey\.sh.*|${entry_path_line}|" \
             "${MEL_CONFIG}"
         ok "Updated srvsurvey.sh path in ${MEL_CONFIG}"
         return
@@ -520,11 +540,9 @@ fi
 
 # Keep the terminal open when launched from a file browser so the user can
 # read the Steam launch option instructions above before the window closes.
-# Read from /dev/tty directly so this works even when stdin is redirected
-# (e.g. when a desktop file manager invokes the script without a proper TTY
-# on stdin).  Fall back gracefully if no terminal device is available.
-if [[ -e /dev/tty ]]; then
+# Skip this in CI or other automated runs.
+if [[ "${CI:-}" != "1" && "${INSTALL_SH_NO_WAIT:-}" != "1" && -e /dev/tty && -t 1 ]]; then
     read -rp "Press Enter to close..." _ < /dev/tty || true
-else
+elif [[ -t 1 ]]; then
     echo "(Close this window when you are done reading.)"
 fi

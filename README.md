@@ -70,9 +70,24 @@ The script will:
 
 Everything is installed under `~/.local/share/ed-srv-survey-helper/` by default. Pass `--install-dir /your/path` to choose a different location.
 
+For automated runs (for example in CI or local tests), set `INSTALL_SH_NO_WAIT=1` to skip the final "Press Enter to close..." prompt.
+
 ### Updating
 
 Run `./install.sh` again at any time. Versions that are already current are skipped; only newer releases are downloaded.
+
+## Testing
+
+Run the installer tests with:
+
+```bash
+bash tests/test_install.sh
+bash tests/test_srvsurvey.sh
+```
+
+The test harnesses mock network downloads, extraction, Wine binaries, Proton paths, and sleep timing so they can run safely on Linux or macOS without touching your real Steam or config directories.
+
+Continuous integration runs `shellcheck` plus both test suites on GitHub Actions for Ubuntu and macOS.
 
 ### One manual step
 
