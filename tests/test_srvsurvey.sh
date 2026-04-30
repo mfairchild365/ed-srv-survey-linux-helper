@@ -98,6 +98,24 @@ prepare_env() {
     echo "${test_tmp_root}|${launcher_dir}|${srv_dir}|${bin_dir}|${steamapps_dir}|${compat_dir}"
 }
 
+prepare_installed_layout_env() {
+    local test_name="$1"
+    local test_tmp_root
+    test_tmp_root="$(make_temp_dir)"
+
+    local srv_dir="${test_tmp_root}/${test_name}/SrvSurvey"
+    local bin_dir="${test_tmp_root}/${test_name}/bin"
+    local steamapps_dir="${test_tmp_root}/${test_name}/Steam/steamapps"
+    local compat_dir="${steamapps_dir}/compatdata/359320"
+    local prefix_dir="${compat_dir}/pfx"
+
+    mkdir -p "${srv_dir}" "${bin_dir}" "${prefix_dir}"
+    cp "${REPO_ROOT}/srvsurvey.sh" "${srv_dir}/srvsurvey.sh"
+    printf 'fake exe\n' > "${srv_dir}/SrvSurvey.exe"
+
+    echo "${test_tmp_root}|${srv_dir}|${bin_dir}|${steamapps_dir}|${compat_dir}"
+}
+
 run_srvsurvey() {
     local launcher_dir="$1"
     local bin_dir="$2"
@@ -139,6 +157,29 @@ test_prefers_wineloader_and_default_dir() {
     assert_wine_arg_present "${wine_log}" "-linux"
     assert_output_contains "${output_file}" "Using Wine binary: ${wineloader}"
     pass "prefers WINELOADER with default SrvSurvey dir"
+}
+
+test_prefers_sibling_exe_in_installed_layout() {
+    local setup
+    setup="$(prepare_installed_layout_env installed-layout)"
+    local srv_dir bin_dir steamapps_dir compat_dir
+    IFS='|' read -r TEST_TMP_ROOT srv_dir bin_dir steamapps_dir compat_dir <<< "${setup}"
+
+    local wine_log="${TEST_TMP_ROOT}/wine.log"
+    local output_file="${TEST_TMP_ROOT}/stdout.log"
+    local wineloader="${TEST_TMP_ROOT}/custom-wine64"
+    write_wine_stub "${wineloader}"
+
+    env PATH="${bin_dir}:${PATH}" \
+        SRV_TEST_WINE_LOG="${wine_log}" \
+        WINELOADER="${wineloader}" \
+        SRVSURVEY_DELAY=0 \
+        bash "${srv_dir}/srvsurvey.sh" > "${output_file}" 2>&1
+
+    assert_file_exists "${wine_log}"
+    assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
+    assert_output_contains "${output_file}" "Launching SrvSurvey from: ${srv_dir}/SrvSurvey.exe"
+    pass "prefers sibling SrvSurvey.exe in installed layout"
 }
 
 test_uses_steam_compat_proton_wine() {
@@ -286,6 +327,8 @@ test_errors_when_no_wine_binary_found() {
 
 main() {
     test_prefers_wineloader_and_default_dir
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_prefers_sibling_exe_in_installed_layout
     TESTS_RUN=$((TESTS_RUN + 1))
     test_uses_steam_compat_proton_wine
     TESTS_RUN=$((TESTS_RUN + 1))

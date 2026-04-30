@@ -151,7 +151,7 @@ git clone https://github.com/mfairchild365/ed-srv-survey-linux-helper.git ~/Game
 
 The script can live anywhere. Two convenient locations:
 
-- **Next to SrvSurvey** (uses default path detection):
+- **Next to SrvSurvey.exe** (uses default path detection):
 
   ```bash
   cp ~/Games/ed-srv-survey-linux-helper/srvsurvey.sh ~/Games/SrvSurvey/srvsurvey.sh
@@ -216,7 +216,7 @@ The installer marks the SrvSurvey helper process with `keepOpen: true` so it is 
 | Variable / Parameter | Default | Description |
 |---|---|---|
 | `SRVSURVEY_DELAY` (env var) | `15` | Seconds to wait before launching SrvSurvey. Increase if Elite fails to start. Set to `0` to disable. |
-| First argument to script | `<script dir>/SrvSurvey` | Path to the SrvSurvey installation directory. |
+| First argument to script | auto-detect | Path to the SrvSurvey installation directory. By default the script first checks for `SrvSurvey.exe` next to itself, then falls back to `<script dir>/SrvSurvey`. |
 
 ### Setting `SRVSURVEY_DELAY`
 

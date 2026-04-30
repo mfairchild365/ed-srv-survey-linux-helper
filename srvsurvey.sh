@@ -12,8 +12,9 @@
 # Usage:
 #   srvsurvey.sh [/path/to/SrvSurvey/directory]
 #
-# If no argument is given, the script looks for a "SrvSurvey" subdirectory
-# alongside this script.
+# If no argument is given, the script first checks whether `SrvSurvey.exe`
+# lives alongside this script. If not, it falls back to a `SrvSurvey`
+# subdirectory next to this script.
 #
 # Environment variables:
 #   SRVSURVEY_DELAY   Seconds to sleep before launching SrvSurvey (default: 15)
@@ -74,8 +75,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# -ge 1 ]]; then
     SRVSURVEY_DIR="$1"
+elif [[ -f "${SCRIPT_DIR}/SrvSurvey.exe" ]]; then
+    SRVSURVEY_DIR="${SCRIPT_DIR}"
 else
-    # Default: a "SrvSurvey" folder next to this script
+    # Fallback: a "SrvSurvey" folder next to this script
     SRVSURVEY_DIR="${SCRIPT_DIR}/SrvSurvey"
 fi
 
