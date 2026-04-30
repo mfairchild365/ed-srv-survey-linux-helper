@@ -136,6 +136,14 @@ find_wine() {
         return
     fi
 
+    local running_proton_wine=""
+    running_proton_wine="$(find_running_proton_wine)"
+    if [[ -n "${running_proton_wine}" && -x "${running_proton_wine}" ]]; then
+        log "Matched Proton Wine from running process: ${running_proton_wine}"
+        echo "${running_proton_wine}"
+        return
+    fi
+
     # Derive wine64 from STEAM_COMPAT_DATA_PATH
     # Typical layout: .../steamapps/compatdata/<appid>/
     # Proton lives at:  .../steamapps/common/Proton - Experimental/files/bin/wine64
@@ -173,6 +181,62 @@ find_wine() {
     echo ""
 }
 
+find_running_proton_wine() {
+    if [[ -z "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
+        echo ""
+        return
+    fi
+
+    local proc_root="${SRVSURVEY_PROC_ROOT:-/proc}"
+    local environ_file=""
+    local pid_dir=""
+    local cmdline_file=""
+    local proton_entry=""
+    local proton_dir=""
+    local candidate=""
+
+    for environ_file in "${proc_root}"/[0-9]*/environ; do
+        [[ -r "${environ_file}" ]] || continue
+        if ! tr '\0' '\n' < "${environ_file}" | grep -Fxq "STEAM_COMPAT_DATA_PATH=${STEAM_COMPAT_DATA_PATH}"; then
+            continue
+        fi
+
+        pid_dir="${environ_file%/environ}"
+        cmdline_file="${pid_dir}/cmdline"
+        [[ -r "${cmdline_file}" ]] || continue
+
+        proton_entry="$(tr '\0' '\n' < "${cmdline_file}" | grep -m 1 -E '/proton$' || true)"
+        [[ -n "${proton_entry}" ]] || continue
+
+        proton_dir="$(dirname "${proton_entry}")"
+        candidate="${proton_dir}/files/bin/wine64"
+        if [[ -x "${candidate}" ]]; then
+            echo "${candidate}"
+            return
+        fi
+    done
+
+    echo ""
+}
+
+configure_wine_runtime() {
+    local wine_path="$1"
+    local wine_bin_dir=""
+    local wineserver_bin=""
+
+    if [[ "${wine_path}" == */files/bin/wine64 || "${wine_path}" == */files/bin/wine ]]; then
+        wine_bin_dir="$(dirname "${wine_path}")"
+        export PATH="${wine_bin_dir}:${PATH}"
+        log "Prepending Proton Wine bin dir to PATH: ${wine_bin_dir}"
+
+        wineserver_bin="${wine_bin_dir}/wineserver"
+        if [[ -x "${wineserver_bin}" ]]; then
+            export WINESERVER="${wineserver_bin}"
+            log "Using wineserver: ${WINESERVER}"
+        fi
+    fi
+}
+
 configure_proton_prefix() {
     if [[ -n "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
         local compat_prefix="${STEAM_COMPAT_DATA_PATH%/}/pfx"
@@ -195,6 +259,8 @@ if [[ -z "${WINE}" ]]; then
     log "that system Wine is installed (wine / wine64)."
     exit 1
 fi
+
+configure_wine_runtime "${WINE}"
 
 log "Using Wine binary: ${WINE}"
 log "Launching SrvSurvey from: ${SRVSURVEY_EXE}"

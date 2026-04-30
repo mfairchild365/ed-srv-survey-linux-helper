@@ -71,6 +71,7 @@ set -euo pipefail
     printf 'env_LD_PRELOAD=%s\n' "${LD_PRELOAD-__unset__}"
     printf 'env_LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH-__unset__}"
     printf 'env_WINEPREFIX=%s\n' "${WINEPREFIX-__unset__}"
+    printf 'env_WINESERVER=%s\n' "${WINESERVER-__unset__}"
     for arg in "$@"; do
         printf 'arg=%s\n' "$arg"
     done
@@ -209,6 +210,49 @@ test_uses_steam_compat_proton_wine() {
     pass "uses Proton wine derived from STEAM_COMPAT_DATA_PATH"
 }
 
+test_prefers_running_proton_process_match() {
+    local setup
+    setup="$(prepare_env running-proton)"
+    local launcher_dir srv_dir bin_dir steamapps_dir compat_dir
+    IFS='|' read -r TEST_TMP_ROOT launcher_dir srv_dir bin_dir steamapps_dir compat_dir <<< "${setup}"
+
+    local wine_log="${TEST_TMP_ROOT}/wine.log"
+    local output_file="${TEST_TMP_ROOT}/stdout.log"
+    local proc_root="${TEST_TMP_ROOT}/proc"
+    local proton_root="${steamapps_dir}/common/Proton - Experimental"
+    local proton_wine="${proton_root}/files/bin/wine64"
+    local proton_wineserver="${proton_root}/files/bin/wineserver"
+
+    mkdir -p "${proc_root}/1234" "$(dirname "${proton_wine}")"
+    write_wine_stub "${proton_wine}"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "${proton_wineserver}"
+    chmod +x "${proton_wineserver}"
+
+    python3 - <<'PY' "${proc_root}/1234/environ" "${compat_dir}" "${proc_root}/1234/cmdline" "${proton_root}/proton"
+import pathlib
+import sys
+
+environ_path = pathlib.Path(sys.argv[1])
+compat_dir = sys.argv[2]
+cmdline_path = pathlib.Path(sys.argv[3])
+proton_path = sys.argv[4]
+
+environ_path.write_bytes(f"STEAM_COMPAT_DATA_PATH={compat_dir}\0USER=tester\0".encode())
+cmdline_path.write_bytes(f"{proton_path}\0waitforexitandrun\0".encode())
+PY
+
+    run_srvsurvey "${launcher_dir}" "${bin_dir}" "${output_file}" "${wine_log}" "" \
+        SRVSURVEY_DELAY=0 \
+        STEAM_COMPAT_DATA_PATH="${compat_dir}" \
+        SRVSURVEY_PROC_ROOT="${proc_root}"
+
+    assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
+    assert_wine_log_contains "${wine_log}" "env_WINESERVER=${proton_wineserver}"
+    assert_output_contains "${output_file}" "Matched Proton Wine from running process: ${proton_wine}"
+    assert_output_contains "${output_file}" "Using wineserver: ${proton_wineserver}"
+    pass "prefers running Proton process for matching compatdata"
+}
+
 test_falls_back_to_system_wine64_and_honors_delay() {
     local setup
     setup="$(prepare_env system-wine)"
@@ -337,6 +381,8 @@ main() {
     test_prefers_sibling_exe_in_installed_layout
     TESTS_RUN=$((TESTS_RUN + 1))
     test_uses_steam_compat_proton_wine
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_prefers_running_proton_process_match
     TESTS_RUN=$((TESTS_RUN + 1))
     test_falls_back_to_system_wine64_and_honors_delay
     TESTS_RUN=$((TESTS_RUN + 1))
