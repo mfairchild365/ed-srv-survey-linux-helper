@@ -72,6 +72,26 @@ set -euo pipefail
     printf 'env_LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH-__unset__}"
     printf 'env_WINEPREFIX=%s\n' "${WINEPREFIX-__unset__}"
     printf 'env_WINESERVER=%s\n' "${WINESERVER-__unset__}"
+    printf 'env_STEAM_COMPAT_CLIENT_INSTALL_PATH=%s\n' "${STEAM_COMPAT_CLIENT_INSTALL_PATH-__unset__}"
+    for arg in "$@"; do
+        printf 'arg=%s\n' "$arg"
+    done
+} >> "${SRV_TEST_WINE_LOG}"
+exit 0
+EOF
+    chmod +x "${file_path}"
+}
+
+write_proton_stub() {
+    local file_path="$1"
+    cat > "${file_path}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+{
+    printf 'argv0=%s\n' "$0"
+    printf 'cwd=%s\n' "$PWD"
+    printf 'env_STEAM_COMPAT_DATA_PATH=%s\n' "${STEAM_COMPAT_DATA_PATH-__unset__}"
+    printf 'env_STEAM_COMPAT_CLIENT_INSTALL_PATH=%s\n' "${STEAM_COMPAT_CLIENT_INSTALL_PATH-__unset__}"
     for arg in "$@"; do
         printf 'arg=%s\n' "$arg"
     done
@@ -206,6 +226,7 @@ test_uses_steam_compat_proton_wine() {
     assert_wine_arg_present "${wine_log}" "-linux"
     assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     assert_wine_log_contains "${wine_log}" "env_WINEPREFIX=${compat_dir}/pfx"
+    assert_wine_log_contains "${wine_log}" "env_STEAM_COMPAT_CLIENT_INSTALL_PATH=${TEST_TMP_ROOT}/proton-fallback/Steam"
     assert_output_contains "${output_file}" "Using Wine binary: ${proton_wine}"
     pass "uses Proton wine derived from STEAM_COMPAT_DATA_PATH"
 }
@@ -221,14 +242,13 @@ test_prefers_running_proton_process_match() {
     local proc_root="${TEST_TMP_ROOT}/proc"
     local proton_root="${steamapps_dir}/common/Proton - Experimental"
     local proton_wine="${proton_root}/files/bin/wine64"
-    local proton_wineserver="${proton_root}/files/bin/wineserver"
+    local proton_launcher="${proton_root}/proton"
 
     mkdir -p "${proc_root}/1234" "$(dirname "${proton_wine}")"
     write_wine_stub "${proton_wine}"
-    printf '#!/usr/bin/env bash\nexit 0\n' > "${proton_wineserver}"
-    chmod +x "${proton_wineserver}"
+    write_proton_stub "${proton_launcher}"
 
-    python3 - <<'PY' "${proc_root}/1234/environ" "${compat_dir}" "${proc_root}/1234/cmdline" "${proton_root}/proton"
+    python3 - <<'PY' "${proc_root}/1234/environ" "${compat_dir}" "${proc_root}/1234/cmdline" "${proton_launcher}"
 import pathlib
 import sys
 
@@ -246,11 +266,14 @@ PY
         STEAM_COMPAT_DATA_PATH="${compat_dir}" \
         SRVSURVEY_PROC_ROOT="${proc_root}"
 
+    assert_wine_log_contains "${wine_log}" "argv0=${proton_launcher}"
+    assert_wine_arg_present "${wine_log}" "run"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
-    assert_wine_log_contains "${wine_log}" "env_WINESERVER=${proton_wineserver}"
-    assert_output_contains "${output_file}" "Matched Proton Wine from running process: ${proton_wine}"
-    assert_output_contains "${output_file}" "Using wineserver: ${proton_wineserver}"
-    pass "prefers running Proton process for matching compatdata"
+    assert_wine_arg_present "${wine_log}" "-linux"
+    assert_wine_log_contains "${wine_log}" "env_STEAM_COMPAT_DATA_PATH=${compat_dir}"
+    assert_wine_log_contains "${wine_log}" "env_STEAM_COMPAT_CLIENT_INSTALL_PATH=${TEST_TMP_ROOT}/running-proton/Steam"
+    assert_output_contains "${output_file}" "Using Proton launcher: ${proton_launcher}"
+    pass "prefers running Proton launcher for matching compatdata"
 }
 
 test_falls_back_to_system_wine64_and_honors_delay() {

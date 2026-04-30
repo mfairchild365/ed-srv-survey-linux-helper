@@ -67,6 +67,34 @@ sanitize_runtime_env() {
 log "Logging to ${LOG_FILE}"
 sanitize_runtime_env
 
+find_running_process_env_value() {
+    local var_name="$1"
+
+    if [[ -z "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
+        echo ""
+        return
+    fi
+
+    local proc_root="${SRVSURVEY_PROC_ROOT:-/proc}"
+    local environ_file=""
+    local value=""
+
+    for environ_file in "${proc_root}"/[0-9]*/environ; do
+        [[ -r "${environ_file}" ]] || continue
+        if ! tr '\0' '\n' < "${environ_file}" | grep -Fxq "STEAM_COMPAT_DATA_PATH=${STEAM_COMPAT_DATA_PATH}"; then
+            continue
+        fi
+
+        value="$(tr '\0' '\n' < "${environ_file}" | grep -m 1 -E "^${var_name}=" || true)"
+        if [[ -n "${value}" ]]; then
+            echo "${value#*=}"
+            return
+        fi
+    done
+
+    echo ""
+}
+
 # ---------------------------------------------------------------------------
 # 1. Locate the SrvSurvey installation directory
 # ---------------------------------------------------------------------------
@@ -181,7 +209,7 @@ find_wine() {
     echo ""
 }
 
-find_running_proton_wine() {
+find_running_proton_launcher() {
     if [[ -z "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
         echo ""
         return
@@ -192,8 +220,6 @@ find_running_proton_wine() {
     local pid_dir=""
     local cmdline_file=""
     local proton_entry=""
-    local proton_dir=""
-    local candidate=""
 
     for environ_file in "${proc_root}"/[0-9]*/environ; do
         [[ -r "${environ_file}" ]] || continue
@@ -206,15 +232,32 @@ find_running_proton_wine() {
         [[ -r "${cmdline_file}" ]] || continue
 
         proton_entry="$(tr '\0' '\n' < "${cmdline_file}" | grep -m 1 -E '/proton$' || true)"
-        [[ -n "${proton_entry}" ]] || continue
-
-        proton_dir="$(dirname "${proton_entry}")"
-        candidate="${proton_dir}/files/bin/wine64"
-        if [[ -x "${candidate}" ]]; then
-            echo "${candidate}"
+        if [[ -n "${proton_entry}" && -x "${proton_entry}" ]]; then
+            echo "${proton_entry}"
             return
         fi
     done
+
+    echo ""
+}
+
+find_running_proton_wine() {
+    local proton_entry=""
+    local proton_dir=""
+    local candidate=""
+
+    proton_entry="$(find_running_proton_launcher)"
+    [[ -n "${proton_entry}" ]] || {
+        echo ""
+        return
+    }
+
+    proton_dir="$(dirname "${proton_entry}")"
+    candidate="${proton_dir}/files/bin/wine64"
+    if [[ -x "${candidate}" ]]; then
+        echo "${candidate}"
+        return
+    fi
 
     echo ""
 }
@@ -249,7 +292,59 @@ configure_proton_prefix() {
     fi
 }
 
+configure_steam_compat_client_install_path() {
+    if [[ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH:-}" ]]; then
+        log "Using existing STEAM_COMPAT_CLIENT_INSTALL_PATH: ${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
+        return
+    fi
+
+    local client_install_path=""
+    client_install_path="$(find_running_process_env_value "STEAM_COMPAT_CLIENT_INSTALL_PATH")"
+
+    if [[ -z "${client_install_path}" && -n "${PROTON_LAUNCHER:-}" ]]; then
+        client_install_path="$(dirname "$(dirname "$(dirname "$(dirname "${PROTON_LAUNCHER}")")")")"
+    fi
+
+    if [[ -z "${client_install_path}" && -n "${WINE:-}" \
+          && ( "${WINE}" == */files/bin/wine64 || "${WINE}" == */files/bin/wine ) ]]; then
+        client_install_path="$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "${WINE}")")")")")")"
+    fi
+
+    if [[ -n "${client_install_path}" ]]; then
+        export STEAM_COMPAT_CLIENT_INSTALL_PATH="${client_install_path}"
+        log "Using Steam client install path: ${STEAM_COMPAT_CLIENT_INSTALL_PATH}"
+    fi
+}
+
+launch_with_proton() {
+    local proton_launcher="$1"
+
+    log "Using Proton launcher: ${proton_launcher}"
+    unset WINESERVER || true
+    unset WINELOADER || true
+
+    set +e
+    "${proton_launcher}" run "${SRVSURVEY_EXE}" -linux >> "${LOG_FILE}" 2>&1
+    launch_status=$?
+    set -e
+
+    return ${launch_status}
+}
+
+launch_with_wine() {
+    local wine_binary="$1"
+
+    set +e
+    "${wine_binary}" "${SRVSURVEY_EXE}" -linux >> "${LOG_FILE}" 2>&1
+    launch_status=$?
+    set -e
+
+    return ${launch_status}
+}
+
 configure_proton_prefix
+
+PROTON_LAUNCHER="$(find_running_proton_launcher)"
 
 WINE="$(find_wine)"
 
@@ -259,6 +354,8 @@ if [[ -z "${WINE}" ]]; then
     log "that system Wine is installed (wine / wine64)."
     exit 1
 fi
+
+configure_steam_compat_client_install_path
 
 configure_wine_runtime "${WINE}"
 
@@ -275,10 +372,19 @@ log "Using working directory: ${SRVSURVEY_DIR}"
 # flag makes the intent clear and guards against edge cases.
 cd "${SRVSURVEY_DIR}"
 
-set +e
-"${WINE}" "${SRVSURVEY_EXE}" -linux >> "${LOG_FILE}" 2>&1
-launch_status=$?
-set -e
+if [[ -n "${PROTON_LAUNCHER}" ]]; then
+    if launch_with_proton "${PROTON_LAUNCHER}"; then
+        launch_status=0
+    else
+        launch_status=$?
+    fi
+else
+    if launch_with_wine "${WINE}"; then
+        launch_status=0
+    else
+        launch_status=$?
+    fi
+fi
 
 if [[ ${launch_status} -ne 0 ]]; then
     log "ERROR: Wine launch exited with status ${launch_status}"

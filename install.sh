@@ -115,6 +115,8 @@ Install them with your package manager, e.g.:
     pacman -S curl unzip python3"
 fi
 
+DOTNET_DESKTOP_RUNTIME_VERB="dotnetdesktop9"
+
 # ---------------------------------------------------------------------------
 # 2. Detect Steam installation and Elite Dangerous
 # ---------------------------------------------------------------------------
@@ -186,6 +188,53 @@ if [[ -n "${STEAM_ROOT}" ]]; then
         note "Install Elite Dangerous via Steam (and run it once) before playing."
     fi
 fi
+
+dotnet_desktop_runtime_installed() {
+    if [[ -z "${ELITE_PREFIX}" || ! -d "${ELITE_PREFIX}" ]]; then
+        return 1
+    fi
+
+    local runtime_base=""
+    for runtime_base in \
+        "${ELITE_PREFIX}/drive_c/Program Files/dotnet/shared/Microsoft.WindowsDesktop.App" \
+        "${ELITE_PREFIX}/drive_c/Program Files (x86)/dotnet/shared/Microsoft.WindowsDesktop.App"; do
+        if compgen -G "${runtime_base}/9.*" > /dev/null; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+ensure_dotnet_desktop_runtime() {
+    heading ".NET Desktop Runtime 9"
+
+    if [[ -z "${ELITE_PREFIX}" || ! -d "${ELITE_PREFIX}" ]]; then
+        note "Elite Dangerous Proton prefix is unavailable; skipping automatic .NET Desktop Runtime setup."
+        note "Run Elite once, then rerun install.sh or install ${DOTNET_DESKTOP_RUNTIME_VERB} with protontricks manually."
+        return 0
+    fi
+
+    if dotnet_desktop_runtime_installed; then
+        ok ".NET Desktop Runtime 9 is already present in ${ELITE_PREFIX}"
+        return 0
+    fi
+
+    note ".NET Desktop Runtime 9 was not detected in the Elite Dangerous prefix."
+
+    if command -v protontricks &>/dev/null; then
+        step "Installing ${DOTNET_DESKTOP_RUNTIME_VERB} via protontricks for app ${ELITE_APP_ID}…"
+        if protontricks -q "${ELITE_APP_ID}" "${DOTNET_DESKTOP_RUNTIME_VERB}"; then
+            ok "Requested ${DOTNET_DESKTOP_RUNTIME_VERB} installation with protontricks"
+        else
+            warn "Automatic protontricks installation failed."
+            note "Try running: protontricks ${ELITE_APP_ID} ${DOTNET_DESKTOP_RUNTIME_VERB}"
+        fi
+    else
+        note "protontricks was not found, so .NET Desktop Runtime 9 could not be installed automatically."
+        note "Install protontricks, then run: protontricks ${ELITE_APP_ID} ${DOTNET_DESKTOP_RUNTIME_VERB}"
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # GitHub release helpers
@@ -589,6 +638,7 @@ build_steam_launch_option() {
 }
 
 configure_mel_settings
+ensure_dotnet_desktop_runtime
 STEAM_LAUNCH_OPTION="$(build_steam_launch_option)"
 
 # ---------------------------------------------------------------------------

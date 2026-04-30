@@ -23,13 +23,13 @@ assert_file_exists() {
 assert_file_contains() {
     local file_path="$1"
     local expected="$2"
-    grep -Fq "$expected" "$file_path" || fail "expected '$expected' in $file_path"
+    grep -Fq -- "$expected" "$file_path" || fail "expected '$expected' in $file_path"
 }
 
 assert_file_not_contains() {
     local file_path="$1"
     local unexpected="$2"
-    if grep -Fq "$unexpected" "$file_path"; then
+    if grep -Fq -- "$unexpected" "$file_path"; then
         fail "did not expect '$unexpected' in $file_path"
     fi
 }
@@ -37,7 +37,12 @@ assert_file_not_contains() {
 assert_output_contains() {
     local output_file="$1"
     local expected="$2"
-    grep -Fq "$expected" "$output_file" || fail "expected '$expected' in $output_file"
+    grep -Fq -- "$expected" "$output_file" || fail "expected '$expected' in $output_file"
+}
+
+assert_file_not_exists() {
+    local file_path="$1"
+    [[ ! -e "$file_path" ]] || fail "did not expect file to exist: $file_path"
 }
 
 make_temp_dir() {
@@ -263,6 +268,22 @@ fi
 cat
 EOF
     chmod +x "${bin_dir}/sed"
+
+    cat > "${bin_dir}/protontricks" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "${HOME}/protontricks.log"
+
+if [[ "${MOCK_PROTONTRICKS_FAIL:-0}" == "1" ]]; then
+    exit 1
+fi
+
+prefix_dir="${HOME}/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/Program Files/dotnet/shared/Microsoft.WindowsDesktop.App/9.0.0"
+mkdir -p "${prefix_dir}"
+exit 0
+EOF
+    chmod +x "${bin_dir}/protontricks"
 }
 
 prepare_env() {
@@ -320,8 +341,24 @@ test_fresh_install_creates_files() {
         assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
     assert_file_contains "${install_dir}/SrvSurvey/.installed-version" "v1.2.3"
     assert_file_contains "${install_dir}/min-ed-launcher/.installed-version" "v4.5.6"
+    assert_file_contains "${home_dir}/protontricks.log" '-q 359320 dotnetdesktop9'
         assert_output_contains "${TEST_TMP_ROOT}/fresh.log" "%command% /autorun /autoquit"
     pass "fresh install creates expected files"
+}
+
+test_skips_dotnet_install_when_runtime_exists() {
+    local setup
+    setup="$(prepare_env dotnet-present)"
+    local home_dir install_dir bin_dir
+    IFS='|' read -r TEST_TMP_ROOT home_dir install_dir bin_dir <<< "${setup}"
+
+    mkdir -p "${home_dir}/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/Program Files/dotnet/shared/Microsoft.WindowsDesktop.App/9.0.12"
+
+    run_install "${home_dir}" "${install_dir}" "${bin_dir}" gnu "${TEST_TMP_ROOT}/dotnet-present.log"
+
+    assert_output_contains "${TEST_TMP_ROOT}/dotnet-present.log" '.NET Desktop Runtime 9 is already present'
+    assert_file_not_exists "${home_dir}/protontricks.log"
+    pass "skips dotnetdesktop9 install when runtime already exists"
 }
 
 test_existing_process_path_updates_in_json() {
@@ -408,6 +445,8 @@ main() {
     test_process_entry_appends_to_existing_processes
     TESTS_RUN=$((TESTS_RUN + 1))
     test_stale_srvsurvey_script_is_replaced
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_skips_dotnet_install_when_runtime_exists
     TESTS_RUN=$((TESTS_RUN + 1))
     echo "1..${TESTS_RUN}"
 }

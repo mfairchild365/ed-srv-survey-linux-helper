@@ -43,9 +43,10 @@ Steam launches Elite via Proton
 ## Prerequisites
 
 - A Linux distro (tested on CachyOS/KDE Plasma; should work on Bazzite, other Arch-based, Fedora, Ubuntu, etc.)
-- Steam with **Proton Experimental** (or another Proton version ≥ 8)
+- Steam with **Proton Experimental** (or another Proton version ≥ 8; Proton `10.0-3` is worth trying if Experimental is unreliable)
 - Elite Dangerous installed via Steam and **run at least once** (to create the Proton prefix)
 - `curl`, `unzip`, and `python3` available on the system
+- `protontricks` recommended so the installer can provision `.NET Desktop Runtime 9` into Elite's Proton prefix automatically
 
 ---
 
@@ -66,7 +67,8 @@ The script will:
 2. Download the latest [ED Mini Launcher](https://github.com/rfvgyhn/min-ed-launcher/releases) Linux binary.
 3. Place `srvsurvey.sh` next to `SrvSurvey.exe`.
 4. Create / update `~/.config/min-ed-launcher/settings.json` with a `processes` entry for `srvsurvey.sh`.
-5. Print the one remaining manual step: setting the Steam launch option with `min-ed-launcher`'s recommended Linux arguments.
+5. Best-effort install `.NET Desktop Runtime 9` into Elite's Proton prefix via `protontricks` when it is available.
+6. Print the one remaining manual step: setting the Steam launch option with `min-ed-launcher`'s recommended Linux arguments.
 
 Everything is installed under `~/.local/share/ed-srv-survey-helper/` by default. Pass `--install-dir /your/path` to choose a different location.
 
@@ -75,6 +77,8 @@ For automated runs (for example in CI or local tests), set `INSTALL_SH_NO_WAIT=1
 ### Updating
 
 Run `./install.sh` again at any time. Versions that are already current are skipped; only newer releases are downloaded.
+
+If `protontricks` is installed and Elite's prefix already exists, the installer also checks for `.NET Desktop Runtime 9` and requests `dotnetdesktop9` automatically when it is missing.
 
 ## Testing
 
@@ -208,6 +212,12 @@ ED Mini Launcher will then:
 SrvSurvey will appear over Elite once it has finished loading.
 
 The installer marks the SrvSurvey helper process with `keepOpen: true` so it is not terminated when `min-ed-launcher` exits via `/autoquit` after the game starts.
+
+If SrvSurvey still fails to start, ensure `.NET Desktop Runtime 9` is installed in the `359320` prefix. The installer attempts this automatically via `protontricks`; manually, the equivalent command is:
+
+```bash
+protontricks 359320 dotnetdesktop9
+```
 
 ---
 
