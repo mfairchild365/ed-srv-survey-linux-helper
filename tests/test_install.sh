@@ -353,38 +353,61 @@ EOF
 
 test_process_entry_appends_to_existing_processes() {
     local setup
-        setup="$(prepare_env append-json)"
+    setup="$(prepare_env append-json)"
     local home_dir install_dir bin_dir
     IFS='|' read -r TEST_TMP_ROOT home_dir install_dir bin_dir <<< "${setup}"
 
     mkdir -p "${home_dir}/.config/min-ed-launcher"
-        cat > "${home_dir}/.config/min-ed-launcher/settings.json" <<'EOF'
+    cat > "${home_dir}/.config/min-ed-launcher/settings.json" <<'EOF'
 {
-    "gameStartDelay": 2,
-    "processes": [
-        {
-            "fileName": "/usr/bin/existing-helper",
-            "arguments": "--demo"
-        }
-    ]
+  "gameStartDelay": 2,
+  "processes": [
+    {
+      "fileName": "/usr/bin/existing-helper",
+      "arguments": "--demo"
+    }
+  ]
 }
 EOF
 
     run_install "${home_dir}" "${install_dir}" "${bin_dir}" gnu "${TEST_TMP_ROOT}/append.log"
 
-        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"gameStartDelay": 2'
-        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/usr/bin/existing-helper"'
-        assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
-            assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"keepOpen": true'
-        pass "srvsurvey process entry appends to existing settings.json"
+    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"gameStartDelay": 2'
+    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"fileName": "/usr/bin/existing-helper"'
+    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" "\"fileName\": \"${install_dir}/SrvSurvey/srvsurvey.sh\""
+    assert_file_contains "${home_dir}/.config/min-ed-launcher/settings.json" '"keepOpen": true'
+    pass "srvsurvey process entry appends to existing settings.json"
+}
+
+test_stale_srvsurvey_script_is_replaced() {
+    local setup
+    setup="$(prepare_env refresh-script)"
+    local home_dir install_dir bin_dir
+    IFS='|' read -r TEST_TMP_ROOT home_dir install_dir bin_dir <<< "${setup}"
+
+    mkdir -p "${install_dir}/SrvSurvey"
+    printf 'fake exe\n' > "${install_dir}/SrvSurvey/SrvSurvey.exe"
+    cat > "${install_dir}/SrvSurvey/srvsurvey.sh" <<'EOF'
+#!/usr/bin/env bash
+echo old-helper
+EOF
+    chmod +x "${install_dir}/SrvSurvey/srvsurvey.sh"
+
+    run_install "${home_dir}" "${install_dir}" "${bin_dir}" gnu "${TEST_TMP_ROOT}/refresh-script.log"
+
+    assert_file_contains "${install_dir}/SrvSurvey/srvsurvey.sh" 'Logging to ${LOG_FILE}'
+    assert_file_not_contains "${install_dir}/SrvSurvey/srvsurvey.sh" 'echo old-helper'
+    pass "stale srvsurvey.sh is refreshed on normal install"
 }
 
 main() {
     test_fresh_install_creates_files
     TESTS_RUN=$((TESTS_RUN + 1))
-        test_existing_process_path_updates_in_json
+    test_existing_process_path_updates_in_json
     TESTS_RUN=$((TESTS_RUN + 1))
-        test_process_entry_appends_to_existing_processes
+    test_process_entry_appends_to_existing_processes
+    TESTS_RUN=$((TESTS_RUN + 1))
+    test_stale_srvsurvey_script_is_replaced
     TESTS_RUN=$((TESTS_RUN + 1))
     echo "1..${TESTS_RUN}"
 }

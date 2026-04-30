@@ -422,13 +422,24 @@ heading "srvsurvey.sh launcher script"
 
 SRVSURVEY_SH_DEST="${SRVSURVEY_INSTALL_DIR}/srvsurvey.sh"
 
-if [[ -f "${SRVSURVEY_SH_DEST}" && "${DO_UPDATE}" == "false" ]]; then
-    ok "srvsurvey.sh is already installed. Pass --update to refresh it."
+SRVSURVEY_SH_NEEDS_REFRESH=false
+if [[ ! -f "${SRVSURVEY_SH_DEST}" ]]; then
+    SRVSURVEY_SH_NEEDS_REFRESH=true
+elif [[ -f "${SCRIPT_DIR}/srvsurvey.sh" ]]; then
+    if ! cmp -s "${SCRIPT_DIR}/srvsurvey.sh" "${SRVSURVEY_SH_DEST}"; then
+        SRVSURVEY_SH_NEEDS_REFRESH=true
+    fi
+elif [[ "${DO_UPDATE}" == "true" ]]; then
+    SRVSURVEY_SH_NEEDS_REFRESH=true
+fi
+
+if [[ "${SRVSURVEY_SH_NEEDS_REFRESH}" == "false" ]]; then
+    ok "srvsurvey.sh is already current."
 else
     # Prefer the copy shipped alongside this install.sh (same repo).
     # Fall back to downloading from GitHub if install.sh was run standalone.
     if [[ -f "${SCRIPT_DIR}/srvsurvey.sh" ]]; then
-        step "Copying srvsurvey.sh from ${SCRIPT_DIR}…"
+        step "Installing srvsurvey.sh from ${SCRIPT_DIR}…"
         # Guard: skip cp if source and destination are the same file
         # (e.g. install.sh was placed inside SRVSURVEY_INSTALL_DIR).
         if [[ ! "${SCRIPT_DIR}/srvsurvey.sh" -ef "${SRVSURVEY_SH_DEST}" ]]; then
