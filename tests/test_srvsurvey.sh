@@ -67,6 +67,7 @@ write_wine_stub() {
 set -euo pipefail
 {
     printf 'argv0=%s\n' "$0"
+    printf 'cwd=%s\n' "$PWD"
     printf 'env_LD_PRELOAD=%s\n' "${LD_PRELOAD-__unset__}"
     printf 'env_LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH-__unset__}"
     printf 'env_WINEPREFIX=%s\n' "${WINEPREFIX-__unset__}"
@@ -155,6 +156,7 @@ test_prefers_wineloader_and_default_dir() {
     assert_file_exists "${wine_log}"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
     assert_wine_arg_present "${wine_log}" "-linux"
+    assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     assert_output_contains "${output_file}" "Using Wine binary: ${wineloader}"
     pass "prefers WINELOADER with default SrvSurvey dir"
 }
@@ -178,6 +180,7 @@ test_prefers_sibling_exe_in_installed_layout() {
 
     assert_file_exists "${wine_log}"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
+    assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     assert_output_contains "${output_file}" "Launching SrvSurvey from: ${srv_dir}/SrvSurvey.exe"
     pass "prefers sibling SrvSurvey.exe in installed layout"
 }
@@ -200,6 +203,7 @@ test_uses_steam_compat_proton_wine() {
 
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
     assert_wine_arg_present "${wine_log}" "-linux"
+    assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     assert_wine_log_contains "${wine_log}" "env_WINEPREFIX=${compat_dir}/pfx"
     assert_output_contains "${output_file}" "Using Wine binary: ${proton_wine}"
     pass "uses Proton wine derived from STEAM_COMPAT_DATA_PATH"
@@ -231,6 +235,7 @@ EOF
     assert_file_contains "${sleep_log}" "7"
     assert_wine_arg_present "${wine_log}" "${srv_dir}/SrvSurvey.exe"
     assert_wine_arg_present "${wine_log}" "-linux"
+    assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     assert_output_contains "${output_file}" "Using Wine binary: wine64"
     pass "falls back to system wine64 and honors delay"
 }
@@ -260,6 +265,7 @@ test_sanitizes_steam_runtime_environment() {
     assert_output_contains "${output_file}" "Restoring host LD_LIBRARY_PATH from MEL_LD_LIBRARY_PATH"
     assert_wine_log_contains "${wine_log}" 'env_LD_PRELOAD=__unset__'
     assert_wine_log_contains "${wine_log}" 'env_LD_LIBRARY_PATH=/host/runtime/lib'
+    assert_wine_log_contains "${wine_log}" "cwd=${srv_dir}"
     pass "sanitizes Steam runtime environment before launching Wine"
 }
 

@@ -198,6 +198,7 @@ fi
 
 log "Using Wine binary: ${WINE}"
 log "Launching SrvSurvey from: ${SRVSURVEY_EXE}"
+log "Using working directory: ${SRVSURVEY_DIR}"
 
 # ---------------------------------------------------------------------------
 # 4. Launch SrvSurvey
@@ -206,4 +207,16 @@ log "Launching SrvSurvey from: ${SRVSURVEY_EXE}"
 # SrvSurvey.  The app also auto-detects Linux via the WINELOADER environment
 # variable (which is already set when running under Proton), but passing the
 # flag makes the intent clear and guards against edge cases.
-exec "${WINE}" "${SRVSURVEY_EXE}" -linux
+cd "${SRVSURVEY_DIR}"
+
+set +e
+"${WINE}" "${SRVSURVEY_EXE}" -linux >> "${LOG_FILE}" 2>&1
+launch_status=$?
+set -e
+
+if [[ ${launch_status} -ne 0 ]]; then
+    log "ERROR: Wine launch exited with status ${launch_status}"
+    exit "${launch_status}"
+fi
+
+log "Wine launch exited with status 0"
